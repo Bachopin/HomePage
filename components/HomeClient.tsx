@@ -55,17 +55,21 @@ export default function HomeClient({ items, categories = ['All', 'Work', 'Lab', 
   });
   const springX = useSpring(x, { stiffness: 400, damping: 40 });
 
-  // Precompute horizontal offsets for each category based on actual card widths
-  const categoryOffsets = useMemo(() => {
+  // Precompute horizontal offsets for each category and card positions
+  const { categoryOffsets, cardPositions } = useMemo(() => {
     const offsets: Record<string, number> = {};
+    const positions: number[] = [];
     const gap = 24; // 1.5rem
     const introPadding = windowWidth ? windowWidth / 2 - 312 : 0;
 
     let currentX = introPadding;
 
-    items.forEach((item) => {
+    items.forEach((item, index) => {
       // Intro/Outro also occupy width
       const width = item.size === '2x1' || item.size === '2x2' ? 624 : 300;
+      
+      // Store card center position
+      positions[index] = currentX + width / 2;
 
       if (item.type !== 'intro' && item.type !== 'outro' && item.category) {
         if (offsets[item.category] === undefined) {
@@ -76,7 +80,7 @@ export default function HomeClient({ items, categories = ['All', 'Work', 'Lab', 
       currentX += width + gap;
     });
 
-    return offsets;
+    return { categoryOffsets: offsets, cardPositions: positions };
   }, [items, windowWidth]);
 
   // Track active section based on x value using measured offsets
@@ -118,20 +122,24 @@ export default function HomeClient({ items, categories = ['All', 'Work', 'Lab', 
     }
 
     const targetX = categoryOffsets[category];
-    if (targetX === undefined) return;
+    if (targetX === undefined || targetX === Number.POSITIVE_INFINITY) return;
+
+    // Calculate the target translateX value
+    // The grid starts at introPadding (positive), and we need to move left (negative)
+    // To center the category, we need: translateX = -(targetX - viewportCenter)
+    const viewportCenter = windowWidth / 2;
+    const targetTranslateX = -(targetX - viewportCenter);
 
     // Inverse map: find scrollY that produces this translateX
     // x maps scrollY [300, 4000] -> x [0, maxScroll]
-    // Formula: targetScrollY = 300 + (targetX / Math.abs(maxScroll)) * (4000 - 300)
     if (maxScroll === 0 || Math.abs(maxScroll) === 0) return;
     
-    // targetX is positive (right), maxScroll is negative (left)
-    // We want to find scrollY that makes x = -targetX (moving left)
-    const targetXNegative = -targetX;
-    const progress = Math.abs(targetXNegative / maxScroll);
+    // targetTranslateX is negative (left), maxScroll is also negative
+    // We want to find scrollY that makes x = targetTranslateX
+    const progress = Math.abs(targetTranslateX / Math.abs(maxScroll));
     const targetScrollY = 300 + progress * (4000 - 300);
     
-    window.scrollTo({ top: Math.min(targetScrollY, 4000), behavior: 'smooth' });
+    window.scrollTo({ top: Math.min(Math.max(targetScrollY, 300), 4000), behavior: 'smooth' });
   };
 
   return (
@@ -167,7 +175,7 @@ export default function HomeClient({ items, categories = ['All', 'Work', 'Lab', 
                 paddingRight: 'calc(50vw - 312px)',
               }}
             >
-              {items.map((item) => (
+              {items.map((item, index) => (
                 <MasonryCard
                   key={item.id}
                   id={item.id}
@@ -179,6 +187,9 @@ export default function HomeClient({ items, categories = ['All', 'Work', 'Lab', 
                   type={item.type}
                   link={item.link}
                   scrollProgress={springX}
+                  cardIndex={index}
+                  totalCards={items.length}
+                  cardPosition={cardPositions[index]}
                 />
               ))}
             </div>

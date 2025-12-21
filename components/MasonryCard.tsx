@@ -14,6 +14,9 @@ interface MasonryCardProps {
   scrollProgress?: MotionValue<number>;
   type?: 'intro' | 'project' | 'outro';
   description?: string;
+  cardIndex?: number; // Index for calculating card position
+  totalCards?: number; // Total number of cards
+  cardPosition?: number; // Absolute X position of card center (from parent)
 }
 
 export default function MasonryCard({ 
@@ -25,7 +28,10 @@ export default function MasonryCard({
   link = '#',
   scrollProgress,
   type = 'project',
-  description
+  description,
+  cardIndex = 0,
+  totalCards = 1,
+  cardPosition
 }: MasonryCardProps) {
   const [isHovered, setIsHovered] = useState(false);
   const [imageLoaded, setImageLoaded] = useState(false);
@@ -68,8 +74,8 @@ export default function MasonryCard({
   const IMAGE_SCALE = 1.15;
 
   // Calculate safe parallax limits based on geometry (memoized)
-  const { maxOffset, isHorizontalMove } = useMemo(() => {
-    if (!imgSize) return { maxOffset: 0, isHorizontalMove: false };
+  const { maxOffset, isHorizontalMove, initialOffset } = useMemo(() => {
+    if (!imgSize) return { maxOffset: 0, isHorizontalMove: false, initialOffset: 0 };
 
     const cardW = config.cardW;
     const cardH = config.cardH;
@@ -79,29 +85,35 @@ export default function MasonryCard({
     // Determine movement direction based on aspect ratio comparison
     const isHorizontalMove = imgRatio > cardRatio;
 
-    // Calculate rendered dimensions (assuming object-cover behavior)
-    // If image is relatively wider than card, it fills height and overflows width
+    // Calculate rendered dimensions (assuming object-cover behavior with scale)
     let maxOffset = 0;
+    let initialOffset = 0;
 
     if (isHorizontalMove) {
-      // Image fills height, calculate rendered width and include scale buffer
+      // Image fills height, calculate rendered width with scale
       const renderedImgWidth = cardH * imgRatio * IMAGE_SCALE;
       // Available overflow on each side
-      maxOffset = (renderedImgWidth - cardW) / 2;
+      const totalOverflow = renderedImgWidth - cardW;
+      maxOffset = totalOverflow / 2;
+      // Initial position: center the image (no offset)
+      initialOffset = 0;
     } else if (imgRatio < cardRatio) {
-      // Image fills width, calculate rendered height and include scale buffer
+      // Image fills width, calculate rendered height with scale
       const renderedImgHeight = (cardW / imgRatio) * IMAGE_SCALE;
       // Available overflow on each side
-      maxOffset = (renderedImgHeight - cardH) / 2;
+      const totalOverflow = renderedImgHeight - cardH;
+      maxOffset = totalOverflow / 2;
+      // Initial position: center the image (no offset)
+      initialOffset = 0;
     } else {
       // Ratios match perfectly, no movement
-      return { maxOffset: 0, isHorizontalMove: false };
+      return { maxOffset: 0, isHorizontalMove: false, initialOffset: 0 };
     }
 
-    // Safety buffer: Reduce limit by 20% to ensure no whitespace
-    const safeLimit = Math.max(0, maxOffset * 0.8);
+    // Safety buffer: Reduce limit by 30% to ensure no whitespace (more conservative)
+    const safeLimit = Math.max(0, maxOffset * 0.7);
 
-    return { maxOffset: safeLimit, isHorizontalMove };
+    return { maxOffset: safeLimit, isHorizontalMove, initialOffset };
   }, [imgSize, config.cardW, config.cardH, IMAGE_SCALE]);
 
   // Create a default motion value to use when scrollProgress is not available
@@ -111,22 +123,72 @@ export default function MasonryCard({
   // This ensures we always have a valid MotionValue for useTransform
   const scrollMotionValue = scrollProgress || defaultScrollProgress;
 
+  // Use cardPosition from parent if provided, otherwise calculate approximate position
+  const cardAbsoluteX = useMemo(() => {
+    if (cardPosition !== undefined) return cardPosition;
+    
+    // Fallback: approximate calculation
+    if (typeof window === 'undefined') return 0;
+    
+    const gap = 24;
+    const introPadding = window.innerWidth / 2 - 312;
+    let x = introPadding;
+    
+    // Sum up widths of all cards before this one (approximate as 300px each)
+    for (let i = 0; i < cardIndex; i++) {
+      x += 300 + gap;
+    }
+    // Add half of this card's width to get center
+    x += config.cardW / 2;
+    
+    return x;
+  }, [cardPosition, cardIndex, config.cardW]);
+
   // X Parallax: for wide images (horizontal movement)
+  // Only move when card center has passed viewport center
+  // latest is negative (content moving left), image should move right (positive) for parallax
   const parallaxX = useTransform(scrollMotionValue, (latest) => {
-    if (!scrollProgress || !isHorizontalMove || latest >= 0 || maxOffset === 0) return 0;
-    const progress = Math.min(Math.abs(latest) / 3000, 1);
-    // Map progress to [-maxOffset, maxOffset] range
-    const movement = progress * maxOffset;
-    return Math.min(Math.max(movement, -maxOffset), maxOffset);
+    if (!scrollProgress || !isHorizontalMove || latest >= 0 || maxOffset === 0) return initialOffset;
+    
+    // Calculate card's current position (accounting for scroll transform)
+    const viewportCenter = typeof window !== 'undefined' ? window.innerWidth / 2 : 0;
+    const cardCurrentX = cardAbsoluteX + latest; // latest is negative, so card moves left
+    
+    // Only start parallax when card center has passed viewport center (moved to right side)
+    if (cardCurrentX >= viewportCenter) return initialOffset;
+    
+    // Calculate how far past center the card has moved
+    const distancePastCenter = viewportCenter - cardCurrentX;
+    // Use card width as the range for full parallax effect
+    const parallaxRange = config.cardW;
+    const progress = Math.min(distancePastCenter / parallaxRange, 1);
+    
+    // Image moves right (positive) as card moves left past center
+    // Range: [initialOffset (0), initialOffset + maxOffset]
+    const movement = initialOffset + progress * maxOffset;
+    return Math.min(Math.max(movement, initialOffset), initialOffset + maxOffset);
   });
 
   // Y Parallax: for tall images (vertical movement)
+  // Only move when card center has passed viewport center
   const parallaxY = useTransform(scrollMotionValue, (latest) => {
-    if (!scrollProgress || isHorizontalMove || latest >= 0 || maxOffset === 0) return 0;
-    const progress = Math.min(Math.abs(latest) / 3000, 1);
-    // Map progress to [-maxOffset, maxOffset] range
-    const movement = progress * maxOffset;
-    return Math.min(Math.max(movement, -maxOffset), maxOffset);
+    if (!scrollProgress || isHorizontalMove || latest >= 0 || maxOffset === 0) return initialOffset;
+    
+    // Calculate card's current position
+    const viewportCenter = typeof window !== 'undefined' ? window.innerWidth / 2 : 0;
+    const cardCurrentX = cardAbsoluteX + latest;
+    
+    // Only start parallax when card center has passed viewport center
+    if (cardCurrentX >= viewportCenter) return initialOffset;
+    
+    // Calculate progress
+    const distancePastCenter = viewportCenter - cardCurrentX;
+    const parallaxRange = config.cardW;
+    const progress = Math.min(distancePastCenter / parallaxRange, 1);
+    
+    // Image moves down (positive) as card moves left past center
+    const movement = initialOffset + progress * maxOffset;
+    return Math.min(Math.max(movement, initialOffset), initialOffset + maxOffset);
   });
 
   // Preload image and capture dimensions
@@ -229,12 +291,17 @@ export default function MasonryCard({
           {/* Background Image with Geometry-Aware Parallax */}
           {imageLoaded && !imageError && (
             <motion.div 
-              className="card-image absolute inset-0 bg-cover bg-center"
+              className="card-image absolute inset-0"
               style={{ 
                 backgroundImage: `url(${image})`,
+                backgroundSize: 'cover',
+                backgroundPosition: 'center center',
+                backgroundRepeat: 'no-repeat',
                 x: isHorizontalMove ? parallaxX : 0,
                 y: !isHorizontalMove ? parallaxY : 0,
-                scale: 1.15, // Subtle scale for overflow buffer
+                scale: IMAGE_SCALE,
+                // Ensure image is centered initially
+                transformOrigin: 'center center',
               }}
             />
           )}
