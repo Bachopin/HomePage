@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { motion, MotionValue, useTransform } from 'framer-motion';
+import { ArrowUpRight } from 'lucide-react';
 
 interface MasonryCardProps {
   id: number | string;
@@ -40,12 +41,16 @@ export default function MasonryCard({
 
   const config = sizeConfig[size];
 
-  // Internal parallax effect - move image opposite to scroll direction
+  // Enhanced parallax effect - map scrollProgress to counter-movement
+  // As card moves left, image pans right (0 to +150px)
   const parallaxX = scrollProgress 
     ? useTransform(scrollProgress, (latest) => {
-        // Move image slightly opposite to scroll direction for depth
-        // Range: -10px to 10px based on scroll position
-        return (latest / 2000) * 10;
+        // Map global scrollProgress (0 to -maxScroll) to image movement (0 to +150px)
+        // latest is negative (moving left), so we want positive movement (right)
+        if (latest >= 0) return 0;
+        const maxScroll = Math.abs(latest);
+        const progress = Math.min(Math.abs(latest) / 3000, 1); // Normalize to 0-1
+        return progress * 150; // Max 150px movement
       })
     : 0;
 
@@ -61,6 +66,11 @@ export default function MasonryCard({
       };
     }
   }, [image, type]);
+
+  // Skip rendering if title is "Untitled"
+  if (title === 'Untitled' && type === 'project') {
+    return null;
+  }
 
   // Intro/Outro Card - Minimalist Typography
   if (type === 'intro' || type === 'outro') {
@@ -92,7 +102,7 @@ export default function MasonryCard({
     );
   }
 
-  // Project Card - Image based
+  // Project Card - Image based with always-visible text
   return (
     <motion.div
       className={`relative overflow-hidden rounded-lg cursor-pointer bg-neutral-200 dark:bg-neutral-800 ${config.gridArea}`}
@@ -102,17 +112,22 @@ export default function MasonryCard({
       whileHover={{ scale: 1.02 }}
       transition={{ duration: 0.2 }}
     >
-      <a href={link} className="block w-full h-full">
+      <a 
+        href={link} 
+        className="block w-full h-full"
+        target={link !== '#' ? '_blank' : undefined}
+        rel={link !== '#' ? 'noopener noreferrer' : undefined}
+      >
         {/* Image Container */}
         <div className="w-full h-full relative overflow-hidden">
-          {/* Background Image with Parallax */}
+          {/* Background Image with Enhanced Parallax */}
           {imageLoaded && !imageError && (
             <motion.div 
               className="absolute inset-0 bg-cover bg-center"
               style={{ 
                 backgroundImage: `url(${image})`,
                 x: parallaxX,
-                scale: 1.1, // Slight scale for parallax effect
+                scale: isHovered ? 1.3 : 1.25, // Enhanced scale for parallax effect
               }}
             />
           )}
@@ -134,19 +149,39 @@ export default function MasonryCard({
             </div>
           )}
 
-          {/* Overlay with title and year (shown on hover when image is loaded) */}
+          {/* Permanent Gradient Overlay for text readability */}
           {imageLoaded && !imageError && (
-            <motion.div
-              className="absolute inset-0 bg-black/40 flex flex-col justify-end p-6 z-20"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: isHovered ? 1 : 0 }}
-              transition={{ duration: 0.2 }}
-            >
-              <div className="text-white">
-                <span className="text-xs font-mono opacity-60 text-white/80 mb-1 block">{year}</span>
-                <h3 className="text-lg font-medium">{title}</h3>
+            <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent z-10" />
+          )}
+
+          {/* Link Indicator - Top Right */}
+          {link && link !== '#' && (
+            <div className="absolute top-4 right-4 z-30">
+              <div className="bg-black/40 backdrop-blur-sm rounded-full p-2">
+                <ArrowUpRight className="w-4 h-4 text-white/90" />
               </div>
-            </motion.div>
+            </div>
+          )}
+
+          {/* Always Visible Text Overlay - Bottom Left */}
+          {imageLoaded && !imageError && (
+            <div className="absolute bottom-0 left-0 right-0 p-6 z-20">
+              <div className="text-white">
+                {year && (
+                  <span className="text-xs font-mono opacity-70 text-white/90 mb-1 block">
+                    {year}
+                  </span>
+                )}
+                {title && (
+                  <h3 className="text-lg font-bold mb-1">{title}</h3>
+                )}
+                {description && (
+                  <p className="text-sm opacity-90 text-white/90 line-clamp-2">
+                    {description}
+                  </p>
+                )}
+              </div>
+            </div>
           )}
         </div>
       </a>
