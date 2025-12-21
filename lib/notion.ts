@@ -36,19 +36,15 @@ export async function getDatabaseItems(): Promise<NotionItem[]> {
     }
 
     // Build query with filters and sorting
-    const queryParams: any = {
+    // Try with Status filter first, fallback to no filter if it fails
+    let response;
+    const baseParams: any = {
       database_id: process.env.NOTION_DATABASE_ID,
-      filter: {
-        property: 'Status',
-        select: {
-          equals: 'Live',
-        },
-      },
     };
 
     // Try to sort by Sort Order, fallback to created_time
     try {
-      queryParams.sorts = [
+      baseParams.sorts = [
         {
           property: 'Sort Order',
           direction: 'ascending',
@@ -56,7 +52,7 @@ export async function getDatabaseItems(): Promise<NotionItem[]> {
       ];
     } catch {
       // Fallback to created_time if Sort Order doesn't exist
-      queryParams.sorts = [
+      baseParams.sorts = [
         {
           timestamp: 'created_time',
           direction: 'ascending',
@@ -64,7 +60,31 @@ export async function getDatabaseItems(): Promise<NotionItem[]> {
       ];
     }
 
-    const response = await (notion as any).databases.query(queryParams);
+    // Try query with Status filter first
+    try {
+      const paramsWithFilter = {
+        ...baseParams,
+        filter: {
+          property: 'Status',
+          select: {
+            equals: 'Live',
+          },
+        },
+      };
+      response = await (notion as any).databases.query(paramsWithFilter);
+      console.log(`Query with Status='Live' filter returned ${response.results.length} items`);
+    } catch (filterError: any) {
+      // If Status filter fails (property doesn't exist or no 'Live' items), try without filter
+      console.warn('Status filter failed, trying without filter:', filterError?.message);
+      try {
+        response = await (notion as any).databases.query(baseParams);
+        console.log(`Query without filter returned ${response.results.length} items`);
+      } catch (error: any) {
+        throw error; // Re-throw if base query also fails
+      }
+    }
+
+    console.log(`Fetched ${response.results.length} items from Notion`);
 
     return response.results.map((page: any) => {
       const props = page.properties;
@@ -123,8 +143,13 @@ export async function getDatabaseItems(): Promise<NotionItem[]> {
         category,
       };
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error fetching Notion database:', error);
+    console.error('Error details:', {
+      message: error?.message,
+      code: error?.code,
+      status: error?.status,
+    });
     return [];
   }
 }

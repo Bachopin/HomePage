@@ -8,6 +8,7 @@ export default async function Home() {
   try {
     // Fetch data from Notion
     const rawData = await getDatabaseItems();
+    console.log(`Received ${rawData.length} items from Notion API`);
     
     // Sort Logic - "Sandwich" Order:
     // 1. Filter out item where type === 'intro' -> Place FIRST
