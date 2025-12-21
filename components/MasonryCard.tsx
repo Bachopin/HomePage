@@ -4,14 +4,14 @@ import { useState, useEffect } from 'react';
 import { motion, MotionValue, useTransform } from 'framer-motion';
 
 interface MasonryCardProps {
-  id: number;
+  id: number | string;
   title: string;
   year: string;
   image: string;
   size: '1x1' | '1x2' | '2x1' | '2x2';
   link?: string;
   scrollProgress?: MotionValue<number>;
-  type?: 'intro' | 'project';
+  type?: 'intro' | 'project' | 'outro';
   description?: string;
 }
 
@@ -62,8 +62,8 @@ export default function MasonryCard({
     }
   }, [image, type]);
 
-  // Intro Card - Minimalist Typography
-  if (type === 'intro') {
+  // Intro/Outro Card - Minimalist Typography
+  if (type === 'intro' || type === 'outro') {
     return (
       <motion.div
         className={`relative overflow-hidden rounded-lg cursor-pointer bg-black dark:bg-white ${config.gridArea}`}
@@ -82,7 +82,7 @@ export default function MasonryCard({
               {title}
             </h2>
             {description && (
-              <p className="text-sm text-white/80 dark:text-black/80 text-center max-w-md">
+              <p className="text-sm text-white/80 dark:text-black/80 text-center max-w-md whitespace-pre-wrap">
                 {description}
               </p>
             )}
