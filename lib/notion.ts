@@ -21,6 +21,7 @@ export interface NotionItem {
   link?: string;
   size: '1x1' | '1x2' | '2x1' | '2x2';
   category?: string;
+  sortOrder?: number;
 }
 
 export async function getDatabaseItems(): Promise<NotionItem[]> {
@@ -163,6 +164,16 @@ function mapPageToItem(page: any): NotionItem {
       // Extract category (Category select)
       const category = props.Category?.select?.name || '';
 
+      // Extract sortOrder (Sort number or formula)
+      let sortOrder: number | undefined = undefined;
+      if (props.Sort) {
+        if (props.Sort.type === 'number' && props.Sort.number !== null) {
+          sortOrder = props.Sort.number;
+        } else if (props.Sort.type === 'formula' && props.Sort.formula?.type === 'number' && props.Sort.formula.number !== null) {
+          sortOrder = props.Sort.formula.number;
+        }
+      }
+
   return {
     id: page.id,
     title,
@@ -173,6 +184,7 @@ function mapPageToItem(page: any): NotionItem {
     link,
     size,
     category,
+    sortOrder,
   };
 }
 

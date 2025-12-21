@@ -1,7 +1,5 @@
 'use client';
 
-import Link from 'next/link';
-
 interface NavigationProps {
   activeSection: string;
   categories?: string[];
@@ -23,11 +21,6 @@ export default function Navigation({
   return (
     <header className="fixed top-8 left-0 right-0 z-50 px-16 py-6">
       <div className="relative flex items-center justify-center">
-        {/* Logo - Absolutely positioned to the left */}
-        <Link href="/" className="absolute left-16 text-xl font-medium text-black dark:text-white">
-          Your Name
-        </Link>
-        
         {/* Nav Links - Centered, Dynamic Categories */}
         <nav className="flex gap-8">
           {categories.map((category) => {

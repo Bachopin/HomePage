@@ -41,15 +41,29 @@ export default async function Home() {
     const finalCategoryOrder = [...orderedCategories, ...extraCategories];
     
     // Sort project items by category order (group by category)
+    // Within each category, sort by Sort field (ascending)
+    // Cards without a Sort value should appear after those with a Sort value
     const sortedProjectItems: NotionItem[] = [];
     for (const category of finalCategoryOrder) {
-      const itemsInCategory = projectItems.filter(item => item.category === category);
+      const itemsInCategory = projectItems
+        .filter(item => item.category === category)
+        .sort((a, b) => {
+          const hasSortA = a.sortOrder !== undefined && a.sortOrder !== null;
+          const hasSortB = b.sortOrder !== undefined && b.sortOrder !== null;
+
+          if (hasSortA && hasSortB) {
+            return a.sortOrder! - b.sortOrder!; // Both have sortOrder, sort by value
+          } else if (hasSortA && !hasSortB) {
+            return -1; // A has sortOrder, A comes first
+          } else if (!hasSortA && hasSortB) {
+            return 1; // B has sortOrder, B comes first
+          }
+          return 0; // Neither has sortOrder, maintain original relative order
+        });
       sortedProjectItems.push(...itemsInCategory);
     }
     
-    // Add items without category at the end
-    const itemsWithoutCategory = projectItems.filter(item => !item.category);
-    sortedProjectItems.push(...itemsWithoutCategory);
+    // Filter out items without category (do not display them)
     
     const sortedItems: NotionItem[] = [];
     if (introItem) sortedItems.push(introItem);

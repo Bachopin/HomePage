@@ -15,7 +15,7 @@ export default function HomeClient({ items, categories = ['All', 'Work', 'Lab', 
   const contentRef = useRef<HTMLDivElement>(null);
   const [activeSection, setActiveSection] = useState<string>('All');
   const [contentWidth, setContentWidth] = useState(0);
-  const [windowWidth, setWindowWidth] = useState(0);
+  const [windowWidth, setWindowWidth] = useState(typeof window !== 'undefined' ? window.innerWidth : 1920);
 
   // Dynamic width measurement
   useEffect(() => {
@@ -56,9 +56,11 @@ export default function HomeClient({ items, categories = ['All', 'Work', 'Lab', 
   const springX = useSpring(x, { stiffness: 400, damping: 40 });
 
   // Precompute horizontal offsets for each category and card positions
-  const { categoryOffsets, cardPositions } = useMemo(() => {
+  const { categoryOffsets, cardPositions, cardLeftEdges, cardWidths } = useMemo(() => {
     const offsets: Record<string, number> = {};
     const positions: number[] = [];
+    const leftEdges: number[] = [];
+    const widths: number[] = [];
     const gap = 24; // 1.5rem
     const introPadding = windowWidth ? windowWidth / 2 - 312 : 0;
 
@@ -68,8 +70,10 @@ export default function HomeClient({ items, categories = ['All', 'Work', 'Lab', 
       // Intro/Outro also occupy width
       const width = item.size === '2x1' || item.size === '2x2' ? 624 : 300;
       
-      // Store card center position
+      // Store card left edge, center position, and width
+      leftEdges[index] = currentX;
       positions[index] = currentX + width / 2;
+      widths[index] = width;
 
       if (item.type !== 'intro' && item.type !== 'outro' && item.category) {
         if (offsets[item.category] === undefined) {
@@ -80,89 +84,190 @@ export default function HomeClient({ items, categories = ['All', 'Work', 'Lab', 
       currentX += width + gap;
     });
 
-    return { categoryOffsets: offsets, cardPositions: positions };
+    return { categoryOffsets: offsets, cardPositions: positions, cardLeftEdges: leftEdges, cardWidths: widths };
   }, [items, windowWidth]);
 
-  // Track active section based on card passing through viewport center
+  // Track active section based on card left edge passing through viewport center (crosshair position)
+  // Find the card with smallest non-null sortOrder in each category
   useMotionValueEvent(springX, 'change', (latest) => {
-    const viewportCenter = windowWidth / 2;
+    // If at the start (springX >= 0), show 'All'
+    if (latest >= 0) {
+      setActiveSection('All');
+      return;
+    }
+
+    const viewportCenter = windowWidth / 2; // Crosshair position (center of viewport)
     
-    // Calculate which card is currently at the viewport center
+    // Calculate which category's target card (with smallest sortOrder) has its left edge passed viewport center
     // latest is negative (content moving left), so card position = cardAbsoluteX + latest
     let activeCategory = 'All';
-    let minDistance = Infinity;
+    let mostRecentCategory = 'All';
+    let mostRecentDistance = Infinity;
+    
+    // Get ordered categories (excluding 'All' - it's a virtual tab)
+    const orderedCategories = categories.filter((c) => c !== 'All');
+    if (!orderedCategories.length) {
+      setActiveSection('All');
+      return;
+    }
 
-    items.forEach((item, index) => {
-      // Skip intro/outro cards
-      if (item.type === 'intro' || item.type === 'outro') return;
-      
-      // Only check project cards with categories
-      if (!item.category) return;
+    // For each category, find the card with smallest non-null sortOrder
+    orderedCategories.forEach((category) => {
+      let targetCardIndex = -1;
+      let minSortValue = Infinity;
+      let foundSortCard = false;
 
-      const cardCenterX = cardPositions[index];
-      if (cardCenterX === undefined) return;
+      items.forEach((item, index) => {
+        if (item.type === 'intro' || item.type === 'outro') return;
+        if (!item.category) return;
+        
+        const itemCategory = item.category.trim();
+        const targetCategory = category.trim();
+        if (itemCategory !== targetCategory) return;
 
-      // Calculate current card position (accounting for scroll transform)
-      const cardCurrentX = cardCenterX + latest; // latest is negative
+        // Prioritize cards with a valid sortOrder (not null/undefined)
+        if (item.sortOrder !== undefined && item.sortOrder !== null) {
+          if (!foundSortCard || item.sortOrder < minSortValue) {
+            minSortValue = item.sortOrder;
+            targetCardIndex = index;
+            foundSortCard = true;
+          }
+        } else if (!foundSortCard && targetCardIndex === -1) {
+          // Fallback: if no sortOrder card found, use the first card in array order
+          targetCardIndex = index;
+        }
+      });
+
+      if (targetCardIndex === -1) return;
+
+      const cardLeftEdge = cardLeftEdges[targetCardIndex];
+      if (cardLeftEdge === undefined) return;
+
+      // Calculate current card left edge position (accounting for scroll transform)
+      const cardCurrentLeftX = cardLeftEdge + latest; // latest is negative
       
-      // Calculate distance from card center to viewport center
-      const distance = Math.abs(cardCurrentX - viewportCenter);
-      
-      // Find the card closest to viewport center
-      if (distance < minDistance) {
-        minDistance = distance;
-        activeCategory = item.category;
+      // Check if card left edge has passed viewport center (crosshair)
+      // When left edge passes center, switch to this category
+      if (cardCurrentLeftX < viewportCenter) {
+        // Card left edge has passed center
+        // Calculate distance from left edge to center (positive = passed, smaller = more recently passed)
+        const distance = viewportCenter - cardCurrentLeftX;
+        
+        // Track the most recently passed category (smallest distance)
+        if (distance < mostRecentDistance) {
+          mostRecentDistance = distance;
+          mostRecentCategory = category;
+        }
       }
     });
+
+    // Use the most recently passed category, or 'All' if none has passed
+    if (mostRecentCategory !== 'All') {
+      activeCategory = mostRecentCategory;
+    } else if (orderedCategories.length > 0) {
+      // If no category has passed yet, check if we're at the very end
+      // In that case, select the last category
+      const lastCategory = orderedCategories[orderedCategories.length - 1];
+      let targetCardIndex = -1;
+      let minSortValue = Infinity;
+      let foundSortCard = false;
+
+      items.forEach((item, index) => {
+        if (item.type === 'intro' || item.type === 'outro') return;
+        if (!item.category) return;
+        
+        const itemCategory = item.category.trim();
+        if (itemCategory !== lastCategory.trim()) return;
+
+        if (item.sortOrder !== undefined && item.sortOrder !== null) {
+          if (!foundSortCard || item.sortOrder < minSortValue) {
+            minSortValue = item.sortOrder;
+            targetCardIndex = index;
+            foundSortCard = true;
+          }
+        } else if (!foundSortCard && targetCardIndex === -1) {
+          targetCardIndex = index;
+        }
+      });
+
+      if (targetCardIndex !== -1) {
+        const cardLeftEdge = cardLeftEdges[targetCardIndex];
+        if (cardLeftEdge !== undefined) {
+          const cardCurrentLeftX = cardLeftEdge + latest;
+          // If the last category's card left edge has passed center, select it
+          if (cardCurrentLeftX < viewportCenter) {
+            activeCategory = lastCategory;
+          }
+        }
+      }
+    }
 
     setActiveSection(activeCategory);
   });
 
-  // Scroll to category function - jump to first card of the category
+  // Scroll to category function - align card left edge to viewport center (crosshair position)
+  // Jump to the card with smallest non-null sortOrder in the category
   const scrollToCategory = (category: string) => {
     if (category === 'All') {
       window.scrollTo({ top: 0, behavior: 'smooth' });
       return;
     }
 
-    // Find the first card belonging to this category
-    // Use strict equality check and handle potential whitespace issues
-    const firstCardIndex = items.findIndex((item) => {
-      if (item.type === 'intro' || item.type === 'outro') return false;
-      // Trim and compare to handle any whitespace issues
-      const itemCategory = item.category?.trim();
+    // Find the card with smallest non-null sortOrder belonging to this category
+    let targetCardIndex = -1;
+    let minSortValue = Infinity;
+    let foundSortCard = false;
+
+    items.forEach((item, index) => {
+      if (item.type === 'intro' || item.type === 'outro') return;
+      if (!item.category) return;
+      
+      const itemCategory = item.category.trim();
       const targetCategory = category.trim();
-      return itemCategory === targetCategory;
+      if (itemCategory !== targetCategory) return;
+
+      // Prioritize cards with a valid sortOrder (not null/undefined)
+      if (item.sortOrder !== undefined && item.sortOrder !== null) {
+        if (!foundSortCard || item.sortOrder < minSortValue) {
+          minSortValue = item.sortOrder;
+          targetCardIndex = index;
+          foundSortCard = true;
+        }
+      } else if (!foundSortCard && targetCardIndex === -1) {
+        // Fallback: if no sortOrder card found, use the first card in array order
+        targetCardIndex = index;
+      }
     });
 
-    if (firstCardIndex === -1) {
+    if (targetCardIndex === -1) {
       // Debug: Log all available categories and items
-      const availableCategories = [...new Set(items.filter(i => i.type === 'project').map(i => i.category).filter(Boolean))];
+      const availableCategories = [...new Set(items.filter(i => i.type === 'project' && i.category).map(i => i.category))];
       console.warn(`No card found for category: "${category}"`);
       console.log('Available categories:', availableCategories);
       console.log('All project items:', items.filter(i => i.type === 'project').map((item, idx) => ({
         index: idx,
         title: item.title,
         category: item.category,
-        categoryTrimmed: item.category?.trim()
+        categoryTrimmed: item.category?.trim(),
+        sortOrder: item.sortOrder
       })));
       return;
     }
 
-    const firstCardCenterX = cardPositions[firstCardIndex];
-    if (firstCardCenterX === undefined) {
-      console.warn(`Card position undefined for index: ${firstCardIndex}, card:`, items[firstCardIndex]);
+    const targetCardLeftEdge = cardLeftEdges[targetCardIndex];
+    if (targetCardLeftEdge === undefined) {
+      console.warn(`Card left edge undefined for index: ${targetCardIndex}, card:`, items[targetCardIndex]);
       return;
     }
 
-    // Calculate the target translateX value to center this card
-    // cardPositions[index] is the absolute position of card center (relative to page left)
-    // When springX = 0, card is at cardPositions[index]
-    // When springX = -100, card moves left by 100px, so card is at cardPositions[index] - 100
-    // We want: cardPositions[index] + springX = viewportCenter
-    // So: springX = viewportCenter - cardPositions[index]
-    const viewportCenter = windowWidth / 2;
-    const targetTranslateX = viewportCenter - firstCardCenterX;
+    // Calculate the target translateX value to align card left edge to viewport center (crosshair)
+    // cardLeftEdges[index] is the absolute position of card left edge (relative to page left)
+    // When springX = 0, card left edge is at cardLeftEdges[index]
+    // When springX = -100, card moves left by 100px, so card left edge is at cardLeftEdges[index] - 100
+    // We want: cardLeftEdges[index] + springX = viewportCenter
+    // So: springX = viewportCenter - cardLeftEdges[index]
+    const viewportCenter = windowWidth / 2; // Crosshair position
+    const targetTranslateX = viewportCenter - targetCardLeftEdge;
 
     // Inverse map: find scrollY that produces this translateX
     // x maps scrollY [300, 4000] -> x [0, maxScroll]
@@ -190,6 +295,18 @@ export default function HomeClient({ items, categories = ['All', 'Work', 'Lab', 
     
     window.scrollTo({ top: clampedScrollY, behavior: 'smooth' });
   };
+
+  // Early return if no items (should not happen, but safety check)
+  if (!items || items.length === 0) {
+    return (
+      <div className="bg-stone-100 dark:bg-neutral-700 min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <h1 className="text-2xl font-bold mb-4">No content available</h1>
+          <p className="text-neutral-600 dark:text-neutral-400">Please check your Notion database configuration.</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="bg-stone-100 dark:bg-neutral-700 no-scrollbar">

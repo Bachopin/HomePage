@@ -103,8 +103,9 @@ export default function MasonryCard({
       // Available overflow on each side
       const totalOverflow = renderedImgHeight - cardH;
       maxOffset = totalOverflow / 2;
-      // Initial position: center the image (no offset)
-      initialOffset = 0;
+      // Initial position: start from top (negative offset to show bottom of image)
+      // As card moves, image moves down (positive) to reveal top
+      initialOffset = -maxOffset;
     } else {
       // Ratios match perfectly, no movement
       return { maxOffset: 0, isHorizontalMove: false, initialOffset: 0 };
@@ -187,8 +188,9 @@ export default function MasonryCard({
     const progress = Math.min(distancePastCenter / parallaxRange, 1);
     
     // Image moves down (positive) as card moves left past center
-    const movement = initialOffset + progress * maxOffset;
-    return Math.min(Math.max(movement, initialOffset), initialOffset + maxOffset);
+    // Range: [initialOffset (-maxOffset), initialOffset + 2*maxOffset (+maxOffset)]
+    const movement = initialOffset + progress * (2 * maxOffset);
+    return Math.min(Math.max(movement, initialOffset), initialOffset + 2 * maxOffset);
   });
 
   // Preload image and capture dimensions
@@ -287,27 +289,9 @@ export default function MasonryCard({
         className="block w-full h-full"
       >
         {/* Image Container */}
-        <div className="w-full h-full relative overflow-hidden">
-          {/* Background Image with Geometry-Aware Parallax */}
-          {imageLoaded && !imageError && (
-            <motion.div 
-              className="card-image absolute inset-0"
-              style={{ 
-                backgroundImage: `url(${image})`,
-                backgroundSize: 'cover',
-                backgroundPosition: 'center center',
-                backgroundRepeat: 'no-repeat',
-                x: isHorizontalMove ? parallaxX : 0,
-                y: !isHorizontalMove ? parallaxY : 0,
-                scale: IMAGE_SCALE,
-                // Ensure image is centered initially
-                transformOrigin: 'center center',
-              }}
-            />
-          )}
-
-          {/* Fallback: Show title in center if image fails or while loading */}
-          {(!imageLoaded || imageError) && (
+        <div className="w-full h-full relative overflow-hidden flex items-center justify-center bg-neutral-200 dark:bg-neutral-800">
+          {/* Loading Placeholder */}
+          {(!imageLoaded || imageError || !imgSize) && (
             <div className="absolute inset-0 flex items-center justify-center bg-neutral-200 dark:bg-neutral-800">
               <div className="text-center px-4">
                 <span className="text-xs font-mono opacity-60 text-neutral-500 dark:text-neutral-400 mb-1 block">
@@ -321,6 +305,38 @@ export default function MasonryCard({
                 )}
               </div>
             </div>
+          )}
+
+          {/* Background Image with Geometry-Aware Parallax */}
+          {imageLoaded && !imageError && imgSize && (
+            <motion.div 
+              className="card-image"
+              style={{ 
+                // Dynamic sizing based on aspect ratio comparison
+                // IF moving horizontally (Square img in Tall card), Height fixes to 100%, Width flows naturally
+                ...(isHorizontalMove ? { 
+                  height: '100%', 
+                  width: 'auto',
+                } : { 
+                  // IF moving vertically (Square img in Wide card), Width fixes to 100%, Height flows naturally
+                  width: '100%', 
+                  height: 'auto',
+                }),
+                // Force the aspect ratio to match the natural image
+                aspectRatio: `${imgSize.w} / ${imgSize.h}`,
+                // Apply parallax transforms
+                x: isHorizontalMove ? parallaxX : 0,
+                y: !isHorizontalMove ? parallaxY : 0,
+                scale: IMAGE_SCALE,
+                // Background image styling
+                backgroundImage: `url(${image})`,
+                backgroundSize: 'cover',
+                backgroundPosition: 'center center',
+                backgroundRepeat: 'no-repeat',
+                // Ensure image is centered initially
+                transformOrigin: 'center center',
+              }}
+            />
           )}
 
           {/* Permanent Gradient Overlay for text readability */}
