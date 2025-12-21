@@ -51,11 +51,14 @@ export default async function Home() {
       .map(p => p.category)
       .filter((cat): cat is string => !!cat);
     
+    // Remove duplicates using Set
+    const uniqueProjectCategories = [...new Set(projectCategories)];
+    
     // Sort categories by CATEGORY_ORDER, then add any extras
     const orderedCategories = CATEGORY_ORDER.filter(cat => 
-      projectCategories.includes(cat)
+      uniqueProjectCategories.includes(cat)
     );
-    const extraCategories = projectCategories.filter(cat => 
+    const extraCategories = uniqueProjectCategories.filter(cat => 
       !CATEGORY_ORDER.includes(cat)
     );
     
