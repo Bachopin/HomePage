@@ -5,8 +5,8 @@ import { motion, useSpring, useMotionValue, useMotionValueEvent } from 'framer-m
 import Navigation from '@/components/Navigation';
 import MasonryCard from '@/components/MasonryCard';
 
-// Sample data with Unsplash URLs
-const items = [
+// Base sample data with Unsplash URLs
+const baseItems = [
   { 
     id: 1, 
     title: 'Attention Lab', 
@@ -65,10 +65,18 @@ const items = [
   },
 ];
 
+// Generate 24-30 items by repeating the base array
+const allItems = [
+  ...baseItems.map((item, idx) => ({ ...item, id: idx + 1 })),
+  ...baseItems.map((item, idx) => ({ ...item, id: idx + 9, title: `${item.title} II` })),
+  ...baseItems.map((item, idx) => ({ ...item, id: idx + 17, title: `${item.title} III` })),
+];
+
 export default function Home() {
   const containerRef = useRef<HTMLDivElement>(null);
+  const gridRef = useRef<HTMLDivElement>(null);
   const x = useMotionValue(0);
-  const springX = useSpring(x, { stiffness: 400, damping: 40 });
+  const springX = useSpring(x, { stiffness: 150, damping: 20, mass: 0.5 });
   const [activeSection, setActiveSection] = useState<'work' | 'lab' | 'life'>('work');
 
   // Scroll sync logic: Track x value changes
@@ -86,8 +94,8 @@ export default function Home() {
     const handleWheel = (e: WheelEvent) => {
       e.preventDefault();
       
-      // Map vertical scroll to horizontal movement
-      const deltaX = e.deltaY;
+      // Map vertical scroll to horizontal movement with multiplier
+      const deltaX = e.deltaY * 1.5;
       
       // Get current x value
       const currentX = x.get();
@@ -95,20 +103,14 @@ export default function Home() {
       // Calculate new x value (inverted for natural feel)
       const newX = currentX - deltaX;
       
-      // Set bounds - calculate dynamically based on grid content
-      const container = containerRef.current;
-      if (container) {
-        const gridElement = container.querySelector('[style*="grid"]') as HTMLElement;
-        if (gridElement) {
-          const contentWidth = gridElement.scrollWidth;
-          const viewportWidth = window.innerWidth;
-          const minX = Math.min(0, -(contentWidth - viewportWidth + 64)); // +64 for padding
-          const maxX = 0;
-          const clampedX = Math.max(minX, Math.min(maxX, newX));
-          x.set(clampedX);
-        } else {
-          x.set(newX);
-        }
+      // Set bounds using gridRef
+      if (gridRef.current) {
+        const contentWidth = gridRef.current.scrollWidth;
+        const viewportWidth = window.innerWidth;
+        const minX = Math.min(0, -(contentWidth - viewportWidth + 64)); // +64 for padding
+        const maxX = 0;
+        const clampedX = Math.max(minX, Math.min(maxX, newX));
+        x.set(clampedX);
       } else {
         x.set(newX);
       }
@@ -134,6 +136,7 @@ export default function Home() {
           >
             {/* Horizontal Masonry Grid */}
             <div
+              ref={gridRef}
               className="h-full px-8 inline-grid"
               style={{
                 display: 'grid',
@@ -143,7 +146,7 @@ export default function Home() {
                 width: 'max-content',
               }}
             >
-              {items.map((item) => (
+              {allItems.map((item) => (
                 <MasonryCard
                   key={item.id}
                   id={item.id}
