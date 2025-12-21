@@ -1,205 +1,102 @@
 'use client';
 
+import { useEffect, useRef } from 'react';
+import { motion, useSpring, useMotionValue } from 'framer-motion';
 import Navigation from '@/components/Navigation';
-import TypedText from '@/components/TypedText';
-import DarkModeToggle from '@/components/DarkModeToggle';
-import { useEffect, useState } from 'react';
-import confetti from 'canvas-confetti';
+import MasonryCard from '@/components/MasonryCard';
+
+// Sample data - replace with your actual content
+const items = [
+  { id: 1, title: 'Attention Lab', year: '2025', image: '/img1.jpg', size: '1x1' as const },
+  { id: 2, title: 'Creative Project', year: '2024', image: '/img2.jpg', size: '1x2' as const },
+  { id: 3, title: 'Design System', year: '2023', image: '/img3.jpg', size: '2x1' as const },
+  { id: 4, title: 'Web Experience', year: '2024', image: '/img4.jpg', size: '1x1' as const },
+  { id: 5, title: 'Mobile App', year: '2023', image: '/img5.jpg', size: '1x1' as const },
+  { id: 6, title: 'Brand Identity', year: '2024', image: '/img6.jpg', size: '1x2' as const },
+  { id: 7, title: 'Experimental', year: '2025', image: '/img7.jpg', size: '2x1' as const },
+  { id: 8, title: 'Research Lab', year: '2024', image: '/img8.jpg', size: '1x1' as const },
+];
 
 export default function Home() {
-  const [queueNumber, setQueueNumber] = useState('');
-  const [email, setEmail] = useState('');
-
-  const handleQueueSubmit = () => {
-    const inputValue = email.trim();
-
-    if (inputValue.length >= 10 && inputValue.includes('@')) {
-      // 触发彩纸效果
-      confetti({
-        particleCount: 200,
-        spread: 360,
-      });
-
-      const counter = Math.floor(Math.random() * 1000000) + 9999998;
-      setQueueNumber(`Your queue number is ${counter}`);
-      setEmail('');
-    } else if (inputValue === '') {
-      setQueueNumber('Your input is empty 🤣🤣🤣');
-    } else {
-      setQueueNumber('Make sure your email correct 🤨');
-    }
-  };
+  const containerRef = useRef<HTMLDivElement>(null);
+  const x = useMotionValue(0);
+  const springX = useSpring(x, { stiffness: 400, damping: 40 });
 
   useEffect(() => {
-    const handleScroll = () => {
-      const navbar = document.getElementById('navbar');
-      if (navbar) {
-        if (window.pageYOffset > 0) {
-          navbar.classList.add('shadow-sm');
-          navbar.classList.add('dark:shadow-sm');
+    const handleWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      
+      // Map vertical scroll to horizontal movement
+      const deltaX = e.deltaY;
+      
+      // Get current x value
+      const currentX = x.get();
+      
+      // Calculate new x value (inverted for natural feel)
+      const newX = currentX - deltaX;
+      
+      // Set bounds - calculate dynamically based on grid content
+      const container = containerRef.current;
+      if (container) {
+        const gridElement = container.querySelector('[style*="grid"]') as HTMLElement;
+        if (gridElement) {
+          const contentWidth = gridElement.scrollWidth;
+          const viewportWidth = window.innerWidth;
+          const minX = Math.min(0, -(contentWidth - viewportWidth + 64)); // +64 for padding
+          const maxX = 0;
+          const clampedX = Math.max(minX, Math.min(maxX, newX));
+          x.set(clampedX);
         } else {
-          navbar.classList.remove('shadow-sm');
-          navbar.classList.remove('dark:shadow-sm');
+          x.set(newX);
         }
+      } else {
+        x.set(newX);
       }
     };
 
-    window.addEventListener('scroll', handleScroll);
-    return () => window.removeEventListener('scroll', handleScroll);
-  }, []);
+    window.addEventListener('wheel', handleWheel, { passive: false });
+
+    return () => {
+      window.removeEventListener('wheel', handleWheel);
+    };
+  }, [x]);
 
   return (
-    <div className="bg-stone-100 dark:bg-neutral-700 flex flex-col justify-between desktop:h-screen min-h-screen">
+    <div className="h-screen overflow-hidden bg-stone-100 dark:bg-neutral-700">
       <Navigation />
-
-      <main className="max-w-[1200px] m-auto grid p-6 grid-cols-1 tablet:grid-cols-2 desktop:grid-cols-4 desktop:flex-col gap-6 flex-1">
-        {/* About Card */}
-        <div
-          id="busy"
-          className="card group py-9 px-[42px] col-span-3 gap-2 relative flex flex-col tablet:col-span-1 desktop:col-span-2 order-1 desktop:h-fit"
-        >
-          <div className="absolute right-4 top-4 flex items-center py-2 px-[14px] rounded-xl border border-red-300 max-w-fit max-h-fit gap-2 bg-red-50 font-bold text-sm text-red-500 dark:bg-transparent dark:bg-gradient-to-tl from-transparent to-white/30 from-[-90%] to-[70%] dark:border dark:border-stone-300 dark:text-white tracking-wide">
-            <div className="w-2 h-2 animate-pulse bg-red-500 rounded-full"></div>
-            Busy for collaboration!
-          </div>
-          
-          <div className="bg-[url('/open-laptop.png')] bg-center bg-cover w-[97px] h-[97px] group-hover:opacity-0 transition duration-300 ease-in-out"></div>
-          <div className="absolute top-7 bg-center bg-cover w-[97px] h-[97px] bg-[url('/sstt.png')] opacity-0 group-hover:opacity-100 transition duration-300 ease-in-out"></div>
-          
-          <div className="flex flex-col">
-            <h6 className="font-bold text-xl dark:text-neutral-50">Your Name</h6>
-            <p className="text-body-costum text-neutral-700 dark:text-neutral-100">
-              Becoming a Full Stack Pro! 🚀🧑🏻‍💻
-            </p>
-          </div>
-          
-          <TypedText />
-        </div>
-
-        {/* Twitter Card */}
-        <div
-          id="twitter"
-          className="card bg-stone-800 flex justify-center items-center relative min-h-[323px] col-span-3 order-2 tablet:col-span-1 desktop:order-2 desktop:min-h-[283px]"
-        >
-          <a
-            href="https://twitter.com"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="bg-white p-[10px] absolute bottom-2 left-2 rounded-full hover:ring-4 ring-[#E5E5E533] transition-all"
+      
+      {/* Main Container - Fixed height, centered vertically */}
+      <main className="h-[80vh] mt-[20vh] overflow-hidden">
+        <div ref={containerRef} className="h-full overflow-hidden">
+          <motion.div
+            className="h-full"
+            style={{ x: springX }}
           >
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" fill="none">
-              <path
-                fillRule="evenodd"
-                clipRule="evenodd"
-                d="M3.4001 4.39995C3.24097 4.39995 3.08836 4.46317 2.97583 4.57569C2.86331 4.68821 2.8001 4.84082 2.8001 4.99995V11.8C2.8001 12.1312 3.0689 12.4 3.4001 12.4H10.2001C10.3592 12.4 10.5118 12.3367 10.6244 12.2242C10.7369 12.1117 10.8001 11.9591 10.8001 11.8V8.59995C10.8001 8.44082 10.8633 8.28821 10.9758 8.17569C11.0884 8.06317 11.241 7.99995 11.4001 7.99995C11.5592 7.99995 11.7118 8.06317 11.8244 8.17569C11.9369 8.28821 12.0001 8.44082 12.0001 8.59995V11.8C12.0001 12.2773 11.8105 12.7352 11.4729 13.0727C11.1353 13.4103 10.6775 13.6 10.2001 13.6H3.4001C2.92271 13.6 2.46487 13.4103 2.12731 13.0727C1.78974 12.7352 1.6001 12.2773 1.6001 11.8V4.99995C1.6001 4.52256 1.78974 4.06472 2.12731 3.72716C2.46487 3.38959 2.92271 3.19995 3.4001 3.19995H7.4001C7.55923 3.19995 7.71184 3.26317 7.82436 3.37569C7.93688 3.48821 8.0001 3.64082 8.0001 3.79995C8.0001 3.95908 7.93688 4.11169 7.82436 4.22422C7.71184 4.33674 7.55923 4.39995 7.4001 4.39995H3.4001Z"
-                fill="#292524"
-              />
-              <path
-                fillRule="evenodd"
-                clipRule="evenodd"
-                d="M4.95514 10.2025C5.008 10.261 5.07189 10.3085 5.14313 10.3423C5.21438 10.3761 5.29159 10.3955 5.37035 10.3995C5.4491 10.4034 5.52787 10.3918 5.60213 10.3653C5.67639 10.3387 5.74469 10.2978 5.80314 10.2449L13.1999 3.5521V5.8001C13.1999 5.95923 13.2631 6.11184 13.3757 6.22436C13.4882 6.33688 13.6408 6.4001 13.7999 6.4001C13.9591 6.4001 14.1117 6.33688 14.2242 6.22436C14.3367 6.11184 14.3999 5.95923 14.3999 5.8001V2.2001C14.3999 2.04097 14.3367 1.88836 14.2242 1.77583C14.1117 1.66331 13.9591 1.6001 13.7999 1.6001H10.1999C10.0408 1.6001 9.88819 1.66331 9.77567 1.77583C9.66315 1.88836 9.59993 2.04097 9.59993 2.2001C9.59993 2.35923 9.66315 2.51184 9.77567 2.62436C9.88819 2.73688 10.0408 2.8001 10.1999 2.8001H12.2423L4.99754 9.3553C4.93903 9.40817 4.89151 9.47205 4.85772 9.5433C4.82392 9.61454 4.80449 9.69175 4.80055 9.77051C4.79662 9.84927 4.80824 9.92803 4.83477 10.0023C4.86129 10.0766 4.90219 10.1441 4.95514 10.2025Z"
-                fill="#292524"
-              />
-            </svg>
-          </a>
-          <div className="text-white text-4xl">X</div>
-        </div>
-
-        {/* Projects Card */}
-        <div
-          id="projects"
-          className="card relative overflow-hidden min-h-[646px] row-span-2 col-span-3 order-3 tablet:col-span-2 desktop:col-span-1 desktop:min-h-[283px] group"
-        >
-          <a
-            href="#"
-            target="_blank"
-            className="bg-white w-9 h-9 group-hover:w-[90px] transition-all duration-300 px-[10px] py-[6px] absolute bottom-4 left-4 rounded-full hover:ring-4 ring-[#E5E5E533] flex items-center z-10 hover:transition-all"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" fill="none">
-              <path
-                fillRule="evenodd"
-                clipRule="evenodd"
-                d="M3.4001 4.39995C3.24097 4.39995 3.08836 4.46317 2.97583 4.57569C2.86331 4.68821 2.8001 4.84082 2.8001 4.99995V11.8C2.8001 12.1312 3.0689 12.4 3.4001 12.4H10.2001C10.3592 12.4 10.5118 12.3367 10.6244 12.2242C10.7369 12.1117 10.8001 11.9591 10.8001 11.8V8.59995C10.8001 8.44082 10.8633 8.28821 10.9758 8.17569C11.0884 8.06317 11.241 7.99995 11.4001 7.99995C11.5592 7.99995 11.7118 8.06317 11.8244 8.17569C11.9369 8.28821 12.0001 8.44082 12.0001 8.59995V11.8C12.0001 12.2773 11.8105 12.7352 11.4729 13.0727C11.1353 13.4103 10.6775 13.6 10.2001 13.6H3.4001C2.92271 13.6 2.46487 13.4103 2.12731 13.0727C1.78974 12.7352 1.6001 12.2773 1.6001 11.8V4.99995C1.6001 4.52256 1.78974 4.06472 2.12731 3.72716C2.46487 3.38959 2.92271 3.19995 3.4001 3.19995H7.4001C7.55923 3.19995 7.71184 3.26317 7.82436 3.37569C7.93688 3.48821 8.0001 3.64082 8.0001 3.79995C8.0001 3.95908 7.93688 4.11169 7.82436 4.22422C7.71184 4.33674 7.55923 4.39995 7.4001 4.39995H3.4001Z"
-                fill="#292524"
-              />
-              <path
-                fillRule="evenodd"
-                clipRule="evenodd"
-                d="M4.95514 10.2025C5.008 10.261 5.07189 10.3085 5.14313 10.3423C5.21438 10.3761 5.29159 10.3955 5.37035 10.3995C5.4491 10.4034 5.52787 10.3918 5.60213 10.3653C5.67639 10.3387 5.74469 10.2978 5.80314 10.2449L13.1999 3.5521V5.8001C13.1999 5.95923 13.2631 6.11184 13.3757 6.22436C13.4882 6.33688 13.6408 6.4001 13.7999 6.4001C13.9591 6.4001 14.1117 6.33688 14.2242 6.22436C14.3367 6.11184 14.3999 5.95923 14.3999 5.8001V2.2001C14.3999 2.04097 14.3367 1.88836 14.2242 1.77583C14.1117 1.66331 13.9591 1.6001 13.7999 1.6001H10.1999C10.0408 1.6001 9.88819 1.66331 9.77567 1.77583C9.66315 1.88836 9.59993 2.04097 9.59993 2.2001C9.59993 2.35923 9.66315 2.51184 9.77567 2.62436C9.88819 2.73688 10.0408 2.8001 10.1999 2.8001H12.2423L4.99754 9.3553C4.93903 9.40817 4.89151 9.47205 4.85772 9.5433C4.82392 9.61454 4.80449 9.69175 4.80055 9.77051C4.79662 9.84927 4.80824 9.92803 4.83477 10.0023C4.86129 10.0766 4.90219 10.1441 4.95514 10.2025Z"
-                fill="#292524"
-              />
-            </svg>
-            <span className="text-xs absolute left-6 -translate-x-10 group-hover:translate-x-0 opacity-0 group-hover:opacity-100 leading-[12px] ml-2 transition-all">
-              Project Name
-            </span>
-          </a>
-          <div className="bg-stone-800 h-[1000px] w-[1000px] desktop:h-[500px] desktop:w-[500px] rounded-full absolute top-[45%] right-[-60%] dark:bg-violet-500 dark:blur-2xl"></div>
-          <div className="w-full h-full flex items-center justify-center text-neutral-400">
-            Project Image
-          </div>
-        </div>
-
-        {/* Dark Mode Toggle */}
-        <DarkModeToggle />
-
-        {/* Queue Card */}
-        <div
-          id="queueContainer"
-          className="card flex flex-col gap-3 p-[31px] min-h-[323px] col-span-3 order-4 justify-center desktop:min-h-[283px] desktop:col-span-2"
-        >
-          <h3 className="text-neutral-950 font-black text-2xl dark:text-white tracking-wide">
-            Still pushing for collaboration?
-          </h3>
-          <p className="text-body-costum text-neutral-700 dark:text-neutral-300">
-            Sure, if you're still interested in collaborating with me, you can fill out the email form, and you'll receive a queue number.
-          </p>
-          <input
-            id="queue"
-            type="email"
-            placeholder="xxxx@yourmail.com"
-            className="inline-block w-full mb-3 dark:text-white"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') {
-                handleQueueSubmit();
-              }
-            }}
-          />
-          <div className="flex flex-col justify-between items-center gap-4 tablet:gap-0 desktop:gap-0 tablet:flex-row">
-            <button
-              onClick={handleQueueSubmit}
-              className="bg-white px-[10px] py-[6px] border border-neutral-200 rounded-full hover:ring-4 ring-[#E5E5E533] flex items-center cursor-pointer hover:transition-all w-full justify-center tablet:w-fit"
+            {/* Horizontal Masonry Grid */}
+            <div
+              className="h-full px-8 inline-grid"
+              style={{
+                display: 'grid',
+                gridTemplateRows: 'repeat(2, 1fr)',
+                gridAutoFlow: 'column',
+                gap: '1.5rem',
+                width: 'max-content',
+              }}
             >
-              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" fill="none">
-                <path
-                  fillRule="evenodd"
-                  clipRule="evenodd"
-                  d="M4.17596 11.824C4.28846 11.9364 4.44096 11.9995 4.59996 11.9995C4.75896 11.9995 4.91146 11.9364 5.02396 11.824L10.8 6.048V10.6C10.8 10.7591 10.8632 10.9117 10.9757 11.0243C11.0882 11.1368 11.2408 11.2 11.4 11.2C11.5591 11.2 11.7117 11.1368 11.8242 11.0243C11.9367 10.9117 12 10.7591 12 10.6V4.6C12 4.44087 11.9367 4.28826 11.8242 4.17574C11.7117 4.06321 11.5591 4 11.4 4H5.39996C5.24083 4 5.08822 4.06321 4.9757 4.17574C4.86317 4.28826 4.79996 4.44087 4.79996 4.6C4.79996 4.75913 4.86317 4.91174 4.9757 5.02426C5.08822 5.13679 5.24083 5.2 5.39996 5.2H9.95196L4.17596 10.976C4.0636 11.0885 4.00049 11.241 4.00049 11.4C4.00049 11.559 4.0636 11.7115 4.17596 11.824Z"
-                  fill="#292524"
+              {items.map((item) => (
+                <MasonryCard
+                  key={item.id}
+                  id={item.id}
+                  title={item.title}
+                  year={item.year}
+                  image={item.image}
+                  size={item.size}
                 />
-              </svg>
-              <span className="text-xs leading-[12px] ml-2">Take queue</span>
-            </button>
-            <div className="flex flex-row gap-1 align-baseline">
-              {queueNumber ? (
-                <span className="text-base dark:text-neutral-300">{queueNumber}</span>
-              ) : (
-                <span className="text-base dark:text-neutral-300">You will get a queue number here...</span>
-              )}
+              ))}
             </div>
-          </div>
+          </motion.div>
         </div>
       </main>
-
-      <footer className="w-full py-4">
-        <p className="text-center dark:text-neutral-300">
-          build with ❤️‍🔥 Love. design inspired by{' '}
-          <a href="https://nevflynn.com/" target="_blank" rel="noopener noreferrer" className="font-semibold">
-            nevflynn
-          </a>
-        </p>
-      </footer>
     </div>
   );
 }
