@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { motion, useSpring, useMotionValue } from 'framer-motion';
+import { motion, useSpring, useMotionValue, useMotionValueEvent } from 'framer-motion';
 import Navigation from '@/components/Navigation';
 import MasonryCard from '@/components/MasonryCard';
 
@@ -69,7 +69,18 @@ export default function Home() {
   const containerRef = useRef<HTMLDivElement>(null);
   const x = useMotionValue(0);
   const springX = useSpring(x, { stiffness: 400, damping: 40 });
-  const [activeSection, setActiveSection] = useState<'Work' | 'Lab' | 'Life'>('Work');
+  const [activeSection, setActiveSection] = useState<'work' | 'lab' | 'life'>('work');
+
+  // Scroll sync logic: Track x value changes
+  useMotionValueEvent(springX, 'change', (latest) => {
+    if (latest > -1000) {
+      setActiveSection('work');
+    } else if (latest > -2000) {
+      setActiveSection('lab');
+    } else {
+      setActiveSection('life');
+    }
+  });
 
   useEffect(() => {
     const handleWheel = (e: WheelEvent) => {
@@ -110,27 +121,12 @@ export default function Home() {
     };
   }, [x]);
 
-  // Update active section based on scroll position
-  useEffect(() => {
-    const unsubscribe = springX.on('change', (latest) => {
-      if (latest < -1500) {
-        setActiveSection('Life');
-      } else if (latest < -500) {
-        setActiveSection('Lab');
-      } else {
-        setActiveSection('Work');
-      }
-    });
-
-    return () => unsubscribe();
-  }, [springX]);
-
   return (
     <div className="h-screen overflow-hidden bg-stone-100 dark:bg-neutral-700">
       <Navigation activeSection={activeSection} />
       
-      {/* Main Container - Fixed height, centered vertically */}
-      <main className="h-[80vh] mt-[20vh] overflow-hidden">
+      {/* Main Container - Fixed height: 640px */}
+      <main className="h-[640px] mt-[20vh] overflow-hidden">
         <div ref={containerRef} className="h-full overflow-hidden">
           <motion.div
             className="h-full"
@@ -141,9 +137,9 @@ export default function Home() {
               className="h-full px-8 inline-grid"
               style={{
                 display: 'grid',
-                gridTemplateRows: 'repeat(2, 1fr)',
+                gridTemplateRows: 'repeat(2, 300px)',
                 gridAutoFlow: 'column',
-                gap: '2rem', // gap-8 equivalent (32px)
+                gap: '1.5rem', // gap-6 (24px)
                 width: 'max-content',
               }}
             >

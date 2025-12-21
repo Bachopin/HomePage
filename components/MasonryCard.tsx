@@ -17,11 +17,11 @@ export default function MasonryCard({ id, title, year, image, size, link = '#' }
   const [imageLoaded, setImageLoaded] = useState(false);
   const [imageError, setImageError] = useState(false);
 
-  // Map size prop to grid area and dimensions
+  // Map size prop to grid area and dimensions (matching compact 300px rows)
   const sizeConfig = {
     '1x1': { gridArea: 'row-span-1 col-span-1', width: '300px' },
     '1x2': { gridArea: 'row-span-2 col-span-1', width: '300px' },
-    '2x1': { gridArea: 'row-span-1 col-span-2', width: '600px' },
+    '2x1': { gridArea: 'row-span-1 col-span-2', width: '624px' }, // 300*2 + 24px gap
   };
 
   const config = sizeConfig[size];
