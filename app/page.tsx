@@ -4,8 +4,8 @@ import HomeClient from '@/components/HomeClient';
 // Force dynamic rendering - fetch on every request
 export const revalidate = 0;
 
-// Define category order for sorting
-const CATEGORY_ORDER = ['Work', 'Lab', 'Signal', 'Reading'];
+// Define category order for sorting (must match actual category names from Notion)
+const CATEGORY_ORDER = ['相关链接', '认知投研', '历史项目', '技术分析'];
 
 export default async function Home() {
   let items: NotionItem[] = [];
@@ -18,40 +18,15 @@ export default async function Home() {
     // Sort Logic - "Sandwich" Order:
     // 1. Filter out item where type === 'intro' -> Place FIRST
     // 2. Filter out item where type === 'outro' -> Place LAST
-    // 3. All other type === 'project' items go in the middle
+    // 3. All other type === 'project' items go in the middle, grouped by category
     const introItem = rawData.find(item => item.type === 'intro');
     const outroItem = rawData.find(item => item.type === 'outro');
     const projectItems = rawData.filter(item => item.type === 'project');
     
-    // Sort project items by category order
-    const sortedProjectItems = [...projectItems].sort((a, b) => {
-      const aIndex = CATEGORY_ORDER.indexOf(a.category || '');
-      const bIndex = CATEGORY_ORDER.indexOf(b.category || '');
-      
-      // If both categories are in the order, sort by index
-      if (aIndex !== -1 && bIndex !== -1) {
-        return aIndex - bIndex;
-      }
-      // If only one is in the order, prioritize it
-      if (aIndex !== -1) return -1;
-      if (bIndex !== -1) return 1;
-      // If neither is in the order, maintain original order
-      return 0;
-    });
-    
-    const sortedItems: NotionItem[] = [];
-    if (introItem) sortedItems.push(introItem);
-    sortedItems.push(...sortedProjectItems);
-    if (outroItem) sortedItems.push(outroItem);
-    
-    items = sortedItems;
-    
-    // Dynamic Nav - Generate categories from project data, respecting CATEGORY_ORDER
-    const projectCategories = sortedProjectItems
+    // Get all unique categories from project items
+    const projectCategories = projectItems
       .map(p => p.category)
       .filter((cat): cat is string => !!cat);
-    
-    // Remove duplicates using Set
     const uniqueProjectCategories = [...new Set(projectCategories)];
     
     // Sort categories by CATEGORY_ORDER, then add any extras
@@ -62,7 +37,29 @@ export default async function Home() {
       !CATEGORY_ORDER.includes(cat)
     );
     
-    categories = ['All', ...orderedCategories, ...extraCategories];
+    // Final category order for navigation (matches card order)
+    const finalCategoryOrder = [...orderedCategories, ...extraCategories];
+    
+    // Sort project items by category order (group by category)
+    const sortedProjectItems: NotionItem[] = [];
+    for (const category of finalCategoryOrder) {
+      const itemsInCategory = projectItems.filter(item => item.category === category);
+      sortedProjectItems.push(...itemsInCategory);
+    }
+    
+    // Add items without category at the end
+    const itemsWithoutCategory = projectItems.filter(item => !item.category);
+    sortedProjectItems.push(...itemsWithoutCategory);
+    
+    const sortedItems: NotionItem[] = [];
+    if (introItem) sortedItems.push(introItem);
+    sortedItems.push(...sortedProjectItems);
+    if (outroItem) sortedItems.push(outroItem);
+    
+    items = sortedItems;
+    
+    // Navigation categories - must match the order of cards
+    categories = ['All', ...finalCategoryOrder];
   } catch (error) {
     console.error('Error fetching Notion data:', error);
     // Fallback to empty array if Notion fails
