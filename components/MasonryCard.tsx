@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { motion, MotionValue, useTransform, useMotionValue } from 'framer-motion';
 import { ArrowUpRight } from 'lucide-react';
 
@@ -30,21 +30,78 @@ export default function MasonryCard({
   const [isHovered, setIsHovered] = useState(false);
   const [imageLoaded, setImageLoaded] = useState(false);
   const [imageError, setImageError] = useState(false);
-  const [imgRatio, setImgRatio] = useState<number | null>(null);
+  const [imgSize, setImgSize] = useState<{ w: number; h: number } | null>(null);
 
-  // Map size prop to grid area and dimensions
+  // Map size prop to grid area and pixel dimensions
   const sizeConfig = {
-    '1x1': { gridArea: 'row-span-1 col-span-1', width: '300px', aspectRatio: 1.0 },
-    '1x2': { gridArea: 'row-span-2 col-span-1', width: '300px', aspectRatio: 0.5 },
-    '2x1': { gridArea: 'row-span-1 col-span-2', width: '624px', aspectRatio: 2.0 },
-    '2x2': { gridArea: 'row-span-2 col-span-2', width: '624px', aspectRatio: 1.0 },
+    '1x1': { 
+      gridArea: 'row-span-1 col-span-1', 
+      width: '300px', 
+      cardW: 300, 
+      cardH: 300,
+      aspectRatio: 1.0 
+    },
+    '1x2': { 
+      gridArea: 'row-span-2 col-span-1', 
+      width: '300px', 
+      cardW: 300, 
+      cardH: 624, // 300 + 300 + 24px gap
+      aspectRatio: 0.5 
+    },
+    '2x1': { 
+      gridArea: 'row-span-1 col-span-2', 
+      width: '624px', 
+      cardW: 624, // 300 + 300 + 24px gap
+      cardH: 300,
+      aspectRatio: 2.0 
+    },
+    '2x2': { 
+      gridArea: 'row-span-2 col-span-2', 
+      width: '624px', 
+      cardW: 624, // 300 + 300 + 24px gap
+      cardH: 624, // 300 + 300 + 24px gap
+      aspectRatio: 1.0 
+    },
   };
 
   const config = sizeConfig[size];
 
-  // Smart parallax: determine axis based on image vs card aspect ratio
-  const shouldPanX = imgRatio !== null && imgRatio > config.aspectRatio;
-  const shouldPanY = imgRatio !== null && imgRatio < config.aspectRatio;
+  // Calculate safe parallax limits based on geometry (memoized)
+  const { maxOffset, isHorizontalMove } = useMemo(() => {
+    if (!imgSize) return { maxOffset: 0, isHorizontalMove: false };
+
+    const cardW = config.cardW;
+    const cardH = config.cardH;
+    const imgRatio = imgSize.w / imgSize.h;
+    const cardRatio = cardW / cardH;
+
+    // Determine movement direction based on aspect ratio comparison
+    const isHorizontalMove = imgRatio > cardRatio;
+
+    // Calculate rendered dimensions (assuming object-cover behavior)
+    // If image is relatively wider than card, it fills height and overflows width
+    let maxOffset = 0;
+
+    if (isHorizontalMove) {
+      // Image fills height, calculate rendered width
+      const renderedImgWidth = cardH * imgRatio;
+      // Available overflow on each side
+      maxOffset = (renderedImgWidth - cardW) / 2;
+    } else if (imgRatio < cardRatio) {
+      // Image fills width, calculate rendered height
+      const renderedImgHeight = cardW / imgRatio;
+      // Available overflow on each side
+      maxOffset = (renderedImgHeight - cardH) / 2;
+    } else {
+      // Ratios match perfectly, no movement
+      return { maxOffset: 0, isHorizontalMove: false };
+    }
+
+    // Safety buffer: Reduce limit by 20% to ensure no whitespace
+    const safeLimit = Math.max(0, maxOffset * 0.8);
+
+    return { maxOffset: safeLimit, isHorizontalMove };
+  }, [imgSize, config.cardW, config.cardH]);
 
   // Create a default motion value to use when scrollProgress is not available
   const defaultScrollProgress = useMotionValue(0);
@@ -53,26 +110,22 @@ export default function MasonryCard({
   // This ensures we always have a valid MotionValue for useTransform
   const scrollMotionValue = scrollProgress || defaultScrollProgress;
 
-  // X Parallax: for wide images
-  // Always call useTransform (React hooks rule), but only apply movement if conditions are met
+  // X Parallax: for wide images (horizontal movement)
   const parallaxX = useTransform(scrollMotionValue, (latest) => {
-    // Only apply parallax if scrollProgress exists, shouldPanX is true, and latest is negative
-    if (!scrollProgress || !shouldPanX || latest >= 0) return 0;
+    if (!scrollProgress || !isHorizontalMove || latest >= 0 || maxOffset === 0) return 0;
     const progress = Math.min(Math.abs(latest) / 3000, 1);
-    // Constrain to [-20px, 20px] range
-    const movement = progress * 20;
-    return Math.min(Math.max(movement, -20), 20);
+    // Map progress to [-maxOffset, maxOffset] range
+    const movement = progress * maxOffset;
+    return Math.min(Math.max(movement, -maxOffset), maxOffset);
   });
 
-  // Y Parallax: for tall images
-  // Always call useTransform (React hooks rule), but only apply movement if conditions are met
+  // Y Parallax: for tall images (vertical movement)
   const parallaxY = useTransform(scrollMotionValue, (latest) => {
-    // Only apply parallax if scrollProgress exists, shouldPanY is true, and latest is negative
-    if (!scrollProgress || !shouldPanY || latest >= 0) return 0;
+    if (!scrollProgress || isHorizontalMove || latest >= 0 || maxOffset === 0) return 0;
     const progress = Math.min(Math.abs(latest) / 3000, 1);
-    // Constrain to [-20px, 20px] range
-    const movement = progress * 20;
-    return Math.min(Math.max(movement, -20), 20);
+    // Map progress to [-maxOffset, maxOffset] range
+    const movement = progress * maxOffset;
+    return Math.min(Math.max(movement, -maxOffset), maxOffset);
   });
 
   // Preload image and capture dimensions
@@ -82,8 +135,8 @@ export default function MasonryCard({
       img.src = image;
       img.onload = () => {
         setImageLoaded(true);
-        // Capture image dimensions for aspect ratio calculation
-        setImgRatio(img.naturalWidth / img.naturalHeight);
+        // Capture full image dimensions
+        setImgSize({ w: img.naturalWidth, h: img.naturalHeight });
       };
       img.onerror = () => {
         console.error('Failed to load image:', image);
@@ -172,15 +225,15 @@ export default function MasonryCard({
       >
         {/* Image Container */}
         <div className="w-full h-full relative overflow-hidden">
-          {/* Background Image with Smart Parallax */}
+          {/* Background Image with Geometry-Aware Parallax */}
           {imageLoaded && !imageError && (
             <motion.div 
               className="card-image absolute inset-0 bg-cover bg-center"
               style={{ 
                 backgroundImage: `url(${image})`,
-                x: parallaxX,
-                y: parallaxY,
-                scale: 1.2, // Fixed scale for overflow buffer
+                x: isHorizontalMove ? parallaxX : 0,
+                y: !isHorizontalMove ? parallaxY : 0,
+                scale: 1.15, // Subtle scale for overflow buffer
               }}
             />
           )}
