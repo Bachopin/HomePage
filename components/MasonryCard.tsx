@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { motion, MotionValue, useTransform } from 'framer-motion';
 import { ArrowUpRight } from 'lucide-react';
 
@@ -30,80 +30,53 @@ export default function MasonryCard({
   const [isHovered, setIsHovered] = useState(false);
   const [imageLoaded, setImageLoaded] = useState(false);
   const [imageError, setImageError] = useState(false);
-  const [imgSize, setImgSize] = useState({ w: 0, h: 0 });
-  const containerRef = useRef<HTMLDivElement>(null);
-  const imageRef = useRef<HTMLImageElement>(null);
+  const [imgRatio, setImgRatio] = useState<number | null>(null);
 
   // Map size prop to grid area and dimensions
   const sizeConfig = {
-    '1x1': { gridArea: 'row-span-1 col-span-1', width: '300px', height: '300px', aspect: 1 },
-    '1x2': { gridArea: 'row-span-2 col-span-1', width: '300px', height: '624px', aspect: 0.5 },
-    '2x1': { gridArea: 'row-span-1 col-span-2', width: '624px', height: '300px', aspect: 2 },
-    '2x2': { gridArea: 'row-span-2 col-span-2', width: '624px', height: '624px', aspect: 1 },
+    '1x1': { gridArea: 'row-span-1 col-span-1', width: '300px', aspectRatio: 1.0 },
+    '1x2': { gridArea: 'row-span-2 col-span-1', width: '300px', aspectRatio: 0.5 },
+    '2x1': { gridArea: 'row-span-1 col-span-2', width: '624px', aspectRatio: 2.0 },
+    '2x2': { gridArea: 'row-span-2 col-span-2', width: '624px', aspectRatio: 1.0 },
   };
 
   const config = sizeConfig[size];
 
-  // Smart parallax effect - adapts to image vs card aspect ratio
-  const parallaxX = scrollProgress && imgSize.w > 0 && imgSize.h > 0
+  // Smart parallax: determine axis based on image vs card aspect ratio
+  const shouldPanX = imgRatio !== null && imgRatio > config.aspectRatio;
+  const shouldPanY = imgRatio !== null && imgRatio < config.aspectRatio;
+
+  // X Parallax: for wide images
+  const parallaxX = scrollProgress && shouldPanX
     ? useTransform(scrollProgress, (latest) => {
         if (latest >= 0) return 0;
-        
-        // Calculate image and card aspect ratios
-        const imageAspect = imgSize.w / imgSize.h;
-        const cardAspect = config.aspect;
-        
-        // Determine movement axis based on aspect ratio comparison
-        const shouldPanX = imageAspect > cardAspect; // Image is wider than card
-        
-        if (!shouldPanX) return 0; // Don't pan X if image is taller
-        
-        // Calculate safe movement range
-        const containerWidth = containerRef.current?.offsetWidth || parseInt(config.width);
-        const imageWidth = containerWidth * 1.25; // Account for scale-125
-        const maxOffset = Math.max(0, (imageWidth - containerWidth) / 2);
-        
-        // Clamp to safe range
         const progress = Math.min(Math.abs(latest) / 3000, 1);
-        const movement = progress * Math.min(maxOffset, 30); // Max 30px or available space
-        return Math.min(Math.max(movement, -maxOffset), maxOffset);
+        // Constrain to [-20px, 20px] range
+        const movement = progress * 20;
+        return Math.min(Math.max(movement, -20), 20);
       })
     : 0;
 
-  const parallaxY = scrollProgress && imgSize.w > 0 && imgSize.h > 0
+  // Y Parallax: for tall images
+  const parallaxY = scrollProgress && shouldPanY
     ? useTransform(scrollProgress, (latest) => {
         if (latest >= 0) return 0;
-        
-        // Calculate image and card aspect ratios
-        const imageAspect = imgSize.w / imgSize.h;
-        const cardAspect = config.aspect;
-        
-        // Determine movement axis based on aspect ratio comparison
-        const shouldPanY = imageAspect < cardAspect; // Image is taller than card
-        
-        if (!shouldPanY) return 0; // Don't pan Y if image is wider
-        
-        // Calculate safe movement range
-        const containerHeight = containerRef.current?.offsetHeight || parseInt(config.height);
-        const imageHeight = containerHeight * 1.25; // Account for scale-125
-        const maxOffset = Math.max(0, (imageHeight - containerHeight) / 2);
-        
-        // Clamp to safe range
         const progress = Math.min(Math.abs(latest) / 3000, 1);
-        const movement = progress * Math.min(maxOffset, 30); // Max 30px or available space
-        return Math.min(Math.max(movement, -maxOffset), maxOffset);
+        // Constrain to [-20px, 20px] range
+        const movement = progress * 20;
+        return Math.min(Math.max(movement, -20), 20);
       })
     : 0;
 
-  // Preload image
+  // Preload image and capture dimensions
   useEffect(() => {
     if (type === 'project' && image) {
       const img = new Image();
       img.src = image;
       img.onload = () => {
         setImageLoaded(true);
-        // Dimensions will be set by the img onLoad handler
-        setImgSize({ w: img.naturalWidth, h: img.naturalHeight });
+        // Capture image dimensions for aspect ratio calculation
+        setImgRatio(img.naturalWidth / img.naturalHeight);
       };
       img.onerror = () => {
         console.error('Failed to load image:', image);
@@ -120,7 +93,6 @@ export default function MasonryCard({
   if (type === 'intro' || type === 'outro') {
     return (
       <motion.div
-        ref={containerRef}
         className={`group relative overflow-hidden rounded-[32px] cursor-pointer bg-black dark:bg-white ${config.gridArea}`}
         style={{ width: config.width }}
         onMouseEnter={() => setIsHovered(true)}
@@ -134,16 +106,16 @@ export default function MasonryCard({
           target={hasLink ? '_blank' : undefined}
           rel={hasLink ? 'noopener noreferrer' : undefined}
         >
-          <div className="w-full h-full flex flex-col justify-center items-center p-8 text-white dark:text-black relative">
-            {/* Link Indicator - Top Right (for text cards) */}
-            {hasLink && (
-              <div className="absolute top-4 right-4 z-30 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                <div className="bg-black/40 dark:bg-white/40 backdrop-blur-sm rounded-full p-2">
-                  <ArrowUpRight className="w-4 h-4 text-white dark:text-black" />
-                </div>
+          {/* Link Indicator - Top Right (for intro/outro cards) */}
+          {hasLink && (
+            <div className="absolute top-4 right-4 z-30 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+              <div className="bg-black/40 dark:bg-white/40 backdrop-blur-sm rounded-full p-2">
+                <ArrowUpRight className="w-4 h-4 text-white dark:text-black" />
               </div>
-            )}
-            
+            </div>
+          )}
+          
+          <div className="w-full h-full flex flex-col justify-center items-center p-8 text-white dark:text-black">
             <span className="text-xs font-mono opacity-60 text-white/60 dark:text-black/60 mb-4">
               {year}
             </span>
@@ -161,10 +133,9 @@ export default function MasonryCard({
     );
   }
 
-  // Project Card - Image based with hybrid text visibility
+  // Project Card - Image based with smart parallax
   return (
     <motion.div
-      ref={containerRef}
       className={`group relative overflow-hidden rounded-[32px] cursor-pointer bg-neutral-200 dark:bg-neutral-800 ${config.gridArea}`}
       style={{ width: config.width }}
       onMouseEnter={() => setIsHovered(true)}
@@ -182,28 +153,15 @@ export default function MasonryCard({
         <div className="w-full h-full relative overflow-hidden">
           {/* Background Image with Smart Parallax */}
           {imageLoaded && !imageError && (
-            <>
-              {/* Hidden img for dimension measurement */}
-              <img
-                ref={imageRef}
-                src={image}
-                alt=""
-                className="hidden"
-                onLoad={(e) => {
-                  const img = e.currentTarget;
-                  setImgSize({ w: img.naturalWidth, h: img.naturalHeight });
-                }}
-              />
-              <motion.div 
-                className="card-image absolute inset-0 bg-cover bg-center"
-                style={{ 
-                  backgroundImage: `url(${image})`,
-                  x: parallaxX,
-                  y: parallaxY,
-                  scale: 1.25, // Fixed scale-125 for overflow buffer
-                }}
-              />
-            </>
+            <motion.div 
+              className="card-image absolute inset-0 bg-cover bg-center"
+              style={{ 
+                backgroundImage: `url(${image})`,
+                x: parallaxX,
+                y: parallaxY,
+                scale: 1.2, // Fixed scale for overflow buffer
+              }}
+            />
           )}
 
           {/* Fallback: Show title in center if image fails or while loading */}
@@ -228,8 +186,8 @@ export default function MasonryCard({
             <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent z-10" />
           )}
 
-          {/* Link Indicator - Top Right (Hover Only) */}
-          {hasLink && imageLoaded && !imageError && (
+          {/* Link Indicator - Top Right (Always rendered if link exists) */}
+          {hasLink && (
             <div className="absolute top-4 right-4 z-30 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
               <div className="bg-black/40 backdrop-blur-sm rounded-full p-2">
                 <ArrowUpRight className="w-4 h-4 text-white/90" />
