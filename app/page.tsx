@@ -131,7 +131,7 @@ export default function Home() {
 
   // Stage 1: Scale transform - Map scrollY [0, 300] -> scale [1.15, 1]
   const scale = useTransform(scrollY, [0, 300], [1.15, 1]);
-  const springScale = useSpring(scale, { stiffness: 100, damping: 20 });
+  const springScale = useSpring(scale, { stiffness: 400, damping: 40 });
 
   // Stage 2: X transform - Dynamic calculation based on content width
   // Map scrollY range [300, 4000] to the Calculated Horizontal Distance
@@ -145,7 +145,7 @@ export default function Home() {
     const progress = (latest - 300) / (4000 - 300);
     return progress * maxScroll;
   });
-  const springX = useSpring(x, { stiffness: 100, damping: 20 });
+  const springX = useSpring(x, { stiffness: 400, damping: 40 });
 
   // Track active section based on x value
   useMotionValueEvent(springX, 'change', (latest) => {

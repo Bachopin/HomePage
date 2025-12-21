@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import CrosshairToggle from "@/components/CrosshairToggle";
 
 export const metadata: Metadata = {
   title: "Personal Homepage",
@@ -13,7 +14,10 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className="scroll-smooth">
-      <body className="no-scrollbar">{children}</body>
+      <body className="no-scrollbar">
+        {children}
+        <CrosshairToggle />
+      </body>
     </html>
   );
 }
