@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { motion, MotionValue, useTransform } from 'framer-motion';
+import { motion, MotionValue, useTransform, useMotionValue } from 'framer-motion';
 import { ArrowUpRight } from 'lucide-react';
 
 interface MasonryCardProps {
@@ -46,27 +46,31 @@ export default function MasonryCard({
   const shouldPanX = imgRatio !== null && imgRatio > config.aspectRatio;
   const shouldPanY = imgRatio !== null && imgRatio < config.aspectRatio;
 
+  // Create default motion value if scrollProgress is not provided
+  const defaultScrollProgress = useMotionValue(0);
+  const effectiveScrollProgress = scrollProgress || defaultScrollProgress;
+
   // X Parallax: for wide images
-  const parallaxX = scrollProgress && shouldPanX
-    ? useTransform(scrollProgress, (latest) => {
+  const parallaxX = shouldPanX
+    ? useTransform(effectiveScrollProgress, (latest) => {
         if (latest >= 0) return 0;
         const progress = Math.min(Math.abs(latest) / 3000, 1);
         // Constrain to [-20px, 20px] range
         const movement = progress * 20;
         return Math.min(Math.max(movement, -20), 20);
       })
-    : 0;
+    : useMotionValue(0);
 
   // Y Parallax: for tall images
-  const parallaxY = scrollProgress && shouldPanY
-    ? useTransform(scrollProgress, (latest) => {
+  const parallaxY = shouldPanY
+    ? useTransform(effectiveScrollProgress, (latest) => {
         if (latest >= 0) return 0;
         const progress = Math.min(Math.abs(latest) / 3000, 1);
         // Constrain to [-20px, 20px] range
         const movement = progress * 20;
         return Math.min(Math.max(movement, -20), 20);
       })
-    : 0;
+    : useMotionValue(0);
 
   // Preload image and capture dimensions
   useEffect(() => {
