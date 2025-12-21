@@ -75,7 +75,7 @@ export default function MasonryCard({
       >
         <a href={link} className="block w-full h-full">
           <div className="w-full h-full flex flex-col justify-center items-center p-8 text-white dark:text-black">
-            <span className="text-xs font-mono text-white/60 dark:text-black/60 mb-4">
+            <span className="text-xs font-mono opacity-60 text-white/60 dark:text-black/60 mb-4">
               {year}
             </span>
             <h2 className="text-4xl md:text-5xl font-bold mb-4 text-center">
@@ -121,7 +121,7 @@ export default function MasonryCard({
           {(!imageLoaded || imageError) && (
             <div className="absolute inset-0 flex items-center justify-center bg-neutral-200 dark:bg-neutral-800">
               <div className="text-center px-4">
-                <span className="text-xs font-mono text-neutral-500 dark:text-neutral-400 mb-1 block">
+                <span className="text-xs font-mono opacity-60 text-neutral-500 dark:text-neutral-400 mb-1 block">
                   {year}
                 </span>
                 <h3 className="text-base font-medium text-neutral-700 dark:text-neutral-300">
@@ -143,7 +143,7 @@ export default function MasonryCard({
               transition={{ duration: 0.2 }}
             >
               <div className="text-white">
-                <span className="text-xs font-mono text-white/80 mb-1 block">{year}</span>
+                <span className="text-xs font-mono opacity-60 text-white/80 mb-1 block">{year}</span>
                 <h3 className="text-lg font-medium">{title}</h3>
               </div>
             </motion.div>

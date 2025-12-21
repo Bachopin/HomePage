@@ -35,9 +35,36 @@ export async function getDatabaseItems(): Promise<NotionItem[]> {
       return [];
     }
 
-    const response = await notion.databases.query({
+    // Build query with filters and sorting
+    const queryParams: any = {
       database_id: process.env.NOTION_DATABASE_ID,
-    });
+      filter: {
+        property: 'Status',
+        select: {
+          equals: 'Live',
+        },
+      },
+    };
+
+    // Try to sort by Sort Order, fallback to created_time
+    try {
+      queryParams.sorts = [
+        {
+          property: 'Sort Order',
+          direction: 'ascending',
+        },
+      ];
+    } catch {
+      // Fallback to created_time if Sort Order doesn't exist
+      queryParams.sorts = [
+        {
+          timestamp: 'created_time',
+          direction: 'ascending',
+        },
+      ];
+    }
+
+    const response = await (notion as any).databases.query(queryParams);
 
     return response.results.map((page: any) => {
       const props = page.properties;
@@ -50,10 +77,14 @@ export async function getDatabaseItems(): Promise<NotionItem[]> {
                   props.Year?.title?.[0]?.plain_text || 
                   '';
 
-      // Extract description (Summary property)
-      const description = props.Summary?.rich_text?.[0]?.plain_text || 
-                         props.Summary?.title?.[0]?.plain_text || 
-                         '';
+      // Extract description (Summary property) - support multi-line text
+      // Join all rich_text blocks to preserve line breaks
+      let description = '';
+      if (props.Summary?.rich_text && props.Summary.rich_text.length > 0) {
+        description = props.Summary.rich_text.map((text: any) => text.plain_text).join('');
+      } else if (props.Summary?.title && props.Summary.title.length > 0) {
+        description = props.Summary.title.map((text: any) => text.plain_text).join('');
+      }
 
       // Extract type (Type select)
       const typeRaw = props.Type?.select?.name?.toLowerCase() || 'project';

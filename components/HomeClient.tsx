@@ -8,11 +8,12 @@ import { NotionItem } from '@/lib/notion';
 
 interface HomeClientProps {
   items: NotionItem[];
+  categories?: string[];
 }
 
-export default function HomeClient({ items }: HomeClientProps) {
+export default function HomeClient({ items, categories = ['All', 'Work', 'Lab', 'Life'] }: HomeClientProps) {
   const contentRef = useRef<HTMLDivElement>(null);
-  const [activeSection, setActiveSection] = useState<'work' | 'lab' | 'life'>('work');
+  const [activeSection, setActiveSection] = useState<string>('All');
   const [contentWidth, setContentWidth] = useState(0);
   const [windowWidth, setWindowWidth] = useState(0);
 
@@ -54,21 +55,29 @@ export default function HomeClient({ items }: HomeClientProps) {
   });
   const springX = useSpring(x, { stiffness: 400, damping: 40 });
 
-  // Track active section based on x value
+  // Track active section based on x value (simplified for dynamic categories)
   useMotionValueEvent(springX, 'change', (latest) => {
-    const third = maxScroll / 3;
-    if (latest > third) {
-      setActiveSection('work');
-    } else if (latest > third * 2) {
-      setActiveSection('lab');
-    } else {
-      setActiveSection('life');
+    if (categories.length <= 1) {
+      setActiveSection('All');
+      return;
     }
+    
+    // Divide scroll into sections based on number of categories
+    const sectionCount = categories.length - 1; // Exclude 'All'
+    const sectionSize = maxScroll / sectionCount;
+    
+    for (let i = sectionCount; i > 0; i--) {
+      if (latest <= sectionSize * i) {
+        setActiveSection(categories[i] || 'All');
+        return;
+      }
+    }
+    setActiveSection(categories[0] || 'All');
   });
 
   return (
     <div className="bg-stone-100 dark:bg-neutral-700 no-scrollbar">
-      <Navigation activeSection={activeSection} />
+      <Navigation activeSection={activeSection} categories={categories} />
       
       {/* Scrollable Container - Large height for vertical scrolling */}
       <div className="h-[400vh] no-scrollbar">
