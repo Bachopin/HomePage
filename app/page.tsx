@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { motion, useScroll, useSpring, useTransform, useMotionValueEvent } from 'framer-motion';
 import Navigation from '@/components/Navigation';
 import MasonryCard from '@/components/MasonryCard';
@@ -97,7 +97,34 @@ const allItems = [
 ];
 
 export default function Home() {
+  const contentRef = useRef<HTMLDivElement>(null);
   const [activeSection, setActiveSection] = useState<'work' | 'lab' | 'life'>('work');
+  const [contentWidth, setContentWidth] = useState(0);
+  const [windowWidth, setWindowWidth] = useState(0);
+
+  // Dynamic width measurement
+  useEffect(() => {
+    const handleResize = () => {
+      if (contentRef.current) {
+        // Calculate total scrollable distance needed
+        // We want the Final X to be: -(scrollWidth - viewportWidth)
+        setContentWidth(contentRef.current.scrollWidth);
+        setWindowWidth(window.innerWidth);
+      }
+    };
+
+    // Initial measure & Window resize listener
+    handleResize();
+    window.addEventListener('resize', handleResize);
+    
+    // Also measure after a short delay to ensure content is rendered
+    const timeoutId = setTimeout(handleResize, 100);
+    
+    return () => {
+      window.removeEventListener('resize', handleResize);
+      clearTimeout(timeoutId);
+    };
+  }, [allItems.length]); // Re-measure when items change
 
   // Use native scroll from framer-motion (page scroll)
   const { scrollY } = useScroll();
@@ -106,15 +133,26 @@ export default function Home() {
   const scale = useTransform(scrollY, [0, 300], [1.15, 1]);
   const springScale = useSpring(scale, { stiffness: 100, damping: 20 });
 
-  // Stage 2: X transform - Map scrollY [300, 3000] -> x [0, -2000]
-  const x = useTransform(scrollY, [300, 3000], [0, -2000]);
+  // Stage 2: X transform - Dynamic calculation based on content width
+  // Map scrollY range [300, 4000] to the Calculated Horizontal Distance
+  const maxScroll = contentWidth > windowWidth ? -(contentWidth - windowWidth) : 0;
+  
+  // Create transform with dynamic maxScroll value using callback
+  const x = useTransform(scrollY, (latest) => {
+    if (latest < 300) return 0;
+    if (latest > 4000) return maxScroll;
+    // Linear interpolation between 300 and 4000
+    const progress = (latest - 300) / (4000 - 300);
+    return progress * maxScroll;
+  });
   const springX = useSpring(x, { stiffness: 100, damping: 20 });
 
   // Track active section based on x value
   useMotionValueEvent(springX, 'change', (latest) => {
-    if (latest > -1000) {
+    const third = maxScroll / 3;
+    if (latest > third) {
       setActiveSection('work');
-    } else if (latest > -2000) {
+    } else if (latest > third * 2) {
       setActiveSection('lab');
     } else {
       setActiveSection('life');
@@ -138,6 +176,7 @@ export default function Home() {
           >
             {/* Horizontal Masonry Grid - Centered with dynamic padding */}
             <div
+              ref={contentRef}
               className="h-full inline-grid"
               style={{
                 display: 'grid',
