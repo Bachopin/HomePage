@@ -70,3 +70,9 @@ span.typed-cursor {
   -ms-overflow-style: none;  /* IE and Edge */
   scrollbar-width: none;  /* Firefox */
 }
+
+/* Dark Mode: Grayscale images for Noir aesthetic */
+.dark .card-image {
+  filter: grayscale(100%);
+  transition: filter 0.5s ease;
+}

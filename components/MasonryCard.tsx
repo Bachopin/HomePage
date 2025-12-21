@@ -41,16 +41,18 @@ export default function MasonryCard({
 
   const config = sizeConfig[size];
 
-  // Enhanced parallax effect - map scrollProgress to counter-movement
-  // As card moves left, image pans right (0 to +150px)
+  // Enhanced parallax effect - constrained to prevent whitespace
+  // Limit movement to [-30px, 30px] to prevent revealing edges
   const parallaxX = scrollProgress 
     ? useTransform(scrollProgress, (latest) => {
-        // Map global scrollProgress (0 to -maxScroll) to image movement (0 to +150px)
+        // Map global scrollProgress to constrained image movement
         // latest is negative (moving left), so we want positive movement (right)
         if (latest >= 0) return 0;
         const maxScroll = Math.abs(latest);
         const progress = Math.min(Math.abs(latest) / 3000, 1); // Normalize to 0-1
-        return progress * 150; // Max 150px movement
+        // Constrain to [-30px, 30px] range
+        const movement = progress * 30; // Max 30px movement
+        return Math.min(Math.max(movement, -30), 30);
       })
     : 0;
 
@@ -67,16 +69,14 @@ export default function MasonryCard({
     }
   }, [image, type]);
 
-  // Skip rendering if title is "Untitled"
-  if (title === 'Untitled' && type === 'project') {
-    return null;
-  }
+  // Check if card should show text (not "Untitled" or empty)
+  const showText = title && title !== 'Untitled';
 
   // Intro/Outro Card - Minimalist Typography
   if (type === 'intro' || type === 'outro') {
     return (
       <motion.div
-        className={`relative overflow-hidden rounded-lg cursor-pointer bg-black dark:bg-white ${config.gridArea}`}
+        className={`relative overflow-hidden rounded-[32px] cursor-pointer bg-black dark:bg-white ${config.gridArea}`}
         style={{ width: config.width }}
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
@@ -102,10 +102,10 @@ export default function MasonryCard({
     );
   }
 
-  // Project Card - Image based with always-visible text
+  // Project Card - Image based with hybrid text visibility
   return (
     <motion.div
-      className={`relative overflow-hidden rounded-lg cursor-pointer bg-neutral-200 dark:bg-neutral-800 ${config.gridArea}`}
+      className={`group relative overflow-hidden rounded-[32px] cursor-pointer bg-neutral-200 dark:bg-neutral-800 ${config.gridArea}`}
       style={{ width: config.width }}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
@@ -123,11 +123,11 @@ export default function MasonryCard({
           {/* Background Image with Enhanced Parallax */}
           {imageLoaded && !imageError && (
             <motion.div 
-              className="absolute inset-0 bg-cover bg-center"
+              className="card-image absolute inset-0 bg-cover bg-center"
               style={{ 
                 backgroundImage: `url(${image})`,
                 x: parallaxX,
-                scale: isHovered ? 1.3 : 1.25, // Enhanced scale for parallax effect
+                scale: 1.25, // Fixed scale-125 for overflow buffer
               }}
             />
           )}
@@ -150,33 +150,35 @@ export default function MasonryCard({
           )}
 
           {/* Permanent Gradient Overlay for text readability */}
-          {imageLoaded && !imageError && (
+          {imageLoaded && !imageError && showText && (
             <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent z-10" />
           )}
 
-          {/* Link Indicator - Top Right */}
-          {link && link !== '#' && (
-            <div className="absolute top-4 right-4 z-30">
+          {/* Link Indicator - Top Right (Hover Only) */}
+          {link && link !== '#' && imageLoaded && !imageError && (
+            <div className="absolute top-4 right-4 z-30 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
               <div className="bg-black/40 backdrop-blur-sm rounded-full p-2">
                 <ArrowUpRight className="w-4 h-4 text-white/90" />
               </div>
             </div>
           )}
 
-          {/* Always Visible Text Overlay - Bottom Left */}
-          {imageLoaded && !imageError && (
+          {/* Text Overlay - Bottom Left (Hybrid Visibility) */}
+          {imageLoaded && !imageError && showText && (
             <div className="absolute bottom-0 left-0 right-0 p-6 z-20">
               <div className="text-white">
+                {/* Always Visible: Year and Title */}
                 {year && (
                   <span className="text-xs font-mono opacity-70 text-white/90 mb-1 block">
                     {year}
                   </span>
                 )}
                 {title && (
-                  <h3 className="text-lg font-bold mb-1">{title}</h3>
+                  <h3 className="text-lg font-bold mb-1 opacity-100">{title}</h3>
                 )}
+                {/* Hover Only: Description */}
                 {description && (
-                  <p className="text-sm opacity-90 text-white/90 line-clamp-2">
+                  <p className="text-sm opacity-0 group-hover:opacity-90 text-white/90 line-clamp-2 transition-opacity duration-300">
                     {description}
                   </p>
                 )}
