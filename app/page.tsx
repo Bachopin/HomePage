@@ -20,21 +20,20 @@ export default async function Home() {
     const outroItem = rawData.find(item => item.type === 'outro');
     const projectItems = rawData.filter(item => item.type === 'project');
     
-    // Sort project items by category order
-    const sortedProjectItems = [...projectItems].sort((a, b) => {
-      const aIndex = CATEGORY_ORDER.indexOf(a.category || '');
-      const bIndex = CATEGORY_ORDER.indexOf(b.category || '');
-      
-      // If both categories are in the order, sort by index
-      if (aIndex !== -1 && bIndex !== -1) {
-        return aIndex - bIndex;
-      }
-      // If only one is in the order, prioritize it
-      if (aIndex !== -1) return -1;
-      if (bIndex !== -1) return 1;
-      // If neither is in the order, maintain original order
-      return 0;
-    });
+    // Sort project items by category order - Group by category first
+    const sortedProjectItems: NotionItem[] = [];
+    
+    // First, add items in CATEGORY_ORDER
+    for (const category of CATEGORY_ORDER) {
+      const categoryItems = projectItems.filter(item => item.category === category);
+      sortedProjectItems.push(...categoryItems);
+    }
+    
+    // Then, add items with categories not in CATEGORY_ORDER
+    const remainingItems = projectItems.filter(item => 
+      !item.category || !CATEGORY_ORDER.includes(item.category)
+    );
+    sortedProjectItems.push(...remainingItems);
     
     const sortedItems: NotionItem[] = [];
     if (introItem) sortedItems.push(introItem);
