@@ -174,8 +174,15 @@ export default function HomeClient({ items, categories = ['All', 'Work', 'Lab', 
     }
     
     // targetTranslateX is what we want springX to be
-    // maxScroll is negative, so we need to handle the sign correctly
-    const progress = Math.abs(targetTranslateX / Math.abs(maxScroll));
+    // If targetTranslateX is positive, card is to the left, we can't scroll right (springX can only be negative)
+    // If targetTranslateX is negative, card is to the right, we can scroll left
+    // Clamp targetTranslateX to valid range [maxScroll, 0]
+    const clampedTranslateX = Math.max(Math.min(targetTranslateX, 0), maxScroll);
+    
+    // Map clampedTranslateX to scrollY
+    // Since maxScroll is negative, we need: progress = clampedTranslateX / maxScroll
+    // But clampedTranslateX is also negative, so progress will be positive
+    const progress = Math.abs(clampedTranslateX / maxScroll);
     const targetScrollY = 300 + progress * (4000 - 300);
     
     // Clamp to valid scroll range
