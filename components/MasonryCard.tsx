@@ -8,9 +8,11 @@ interface MasonryCardProps {
   title: string;
   year: string;
   image: string;
-  size: '1x1' | '1x2' | '2x1';
+  size: '1x1' | '1x2' | '2x1' | '2x2';
   link?: string;
   scrollProgress?: MotionValue<number>;
+  type?: 'intro' | 'project';
+  description?: string;
 }
 
 export default function MasonryCard({ 
@@ -20,17 +22,20 @@ export default function MasonryCard({
   image, 
   size, 
   link = '#',
-  scrollProgress 
+  scrollProgress,
+  type = 'project',
+  description
 }: MasonryCardProps) {
   const [isHovered, setIsHovered] = useState(false);
   const [imageLoaded, setImageLoaded] = useState(false);
   const [imageError, setImageError] = useState(false);
 
-  // Map size prop to grid area and dimensions (matching compact 300px rows)
+  // Map size prop to grid area and dimensions
   const sizeConfig = {
     '1x1': { gridArea: 'row-span-1 col-span-1', width: '300px' },
     '1x2': { gridArea: 'row-span-2 col-span-1', width: '300px' },
     '2x1': { gridArea: 'row-span-1 col-span-2', width: '624px' }, // 300*2 + 24px gap
+    '2x2': { gridArea: 'row-span-2 col-span-2', width: '624px' }, // Large square for intro
   };
 
   const config = sizeConfig[size];
@@ -44,17 +49,50 @@ export default function MasonryCard({
       })
     : 0;
 
-  // Preload image on mount
+  // Preload image on mount (only for project cards)
   useEffect(() => {
-    const img = new Image();
-    img.src = image;
-    img.onload = () => setImageLoaded(true);
-    img.onerror = () => {
-      console.error('Failed to load image:', image);
-      setImageError(true);
-    };
-  }, [image]);
+    if (type === 'project' && image) {
+      const img = new Image();
+      img.src = image;
+      img.onload = () => setImageLoaded(true);
+      img.onerror = () => {
+        console.error('Failed to load image:', image);
+        setImageError(true);
+      };
+    }
+  }, [image, type]);
 
+  // Intro Card - Minimalist Typography
+  if (type === 'intro') {
+    return (
+      <motion.div
+        className={`relative overflow-hidden rounded-lg cursor-pointer bg-black dark:bg-white ${config.gridArea}`}
+        style={{ width: config.width }}
+        onMouseEnter={() => setIsHovered(true)}
+        onMouseLeave={() => setIsHovered(false)}
+        whileHover={{ scale: 1.02 }}
+        transition={{ duration: 0.2 }}
+      >
+        <a href={link} className="block w-full h-full">
+          <div className="w-full h-full flex flex-col justify-center items-center p-8 text-white dark:text-black">
+            <span className="text-xs font-mono text-white/60 dark:text-black/60 mb-4">
+              {year}
+            </span>
+            <h2 className="text-4xl md:text-5xl font-bold mb-4 text-center">
+              {title}
+            </h2>
+            {description && (
+              <p className="text-sm text-white/80 dark:text-black/80 text-center max-w-md">
+                {description}
+              </p>
+            )}
+          </div>
+        </a>
+      </motion.div>
+    );
+  }
+
+  // Project Card - Image based
   return (
     <motion.div
       className={`relative overflow-hidden rounded-lg cursor-pointer bg-neutral-200 dark:bg-neutral-800 ${config.gridArea}`}

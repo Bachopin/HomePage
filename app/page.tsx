@@ -5,6 +5,17 @@ import { motion, useScroll, useSpring, useTransform, useMotionValueEvent } from 
 import Navigation from '@/components/Navigation';
 import MasonryCard from '@/components/MasonryCard';
 
+// Intro Card (Bio) - First item
+const introCard = {
+  id: 0,
+  title: 'Attention Lab',
+  year: '2025',
+  description: 'Exploring the financialization of attention in the age of AI.',
+  type: 'intro' as const,
+  size: '2x2' as const,
+  image: '', // Not used for intro cards
+};
+
 // Base sample data with Unsplash URLs
 const baseItems = [
   { 
@@ -65,8 +76,9 @@ const baseItems = [
   },
 ];
 
-// Generate 24 items by repeating the base array
+// Generate items: Intro card first, then repeat base array
 const allItems = [
+  introCard,
   ...baseItems.map((item, idx) => ({ ...item, id: idx + 1 })),
   ...baseItems.map((item, idx) => ({ ...item, id: idx + 9, title: `${item.title} II` })),
   ...baseItems.map((item, idx) => ({ ...item, id: idx + 17, title: `${item.title} III` })),
@@ -102,11 +114,11 @@ export default function Home() {
   });
 
   return (
-    <div className="bg-stone-100 dark:bg-neutral-700">
+    <div className="bg-stone-100 dark:bg-neutral-700 no-scrollbar">
       <Navigation activeSection={activeSection} />
       
       {/* Scrollable Container - Large height for vertical scrolling */}
-      <div className="h-[400vh]">
+      <div className="h-[400vh] no-scrollbar">
         {/* Fixed Viewport Container */}
         <div className="sticky top-0 h-screen flex items-center justify-center overflow-hidden">
           <motion.div
@@ -117,15 +129,16 @@ export default function Home() {
               opacity: springOpacity,
             }}
           >
-            {/* Horizontal Masonry Grid */}
+            {/* Horizontal Masonry Grid - Centered with dynamic padding */}
             <div
-              className="h-full px-8 inline-grid"
+              className="h-full inline-grid"
               style={{
                 display: 'grid',
                 gridTemplateRows: 'repeat(2, 300px)',
                 gridAutoFlow: 'column',
                 gap: '1.5rem',
                 width: 'max-content',
+                paddingLeft: 'calc(50vw - 312px)', // Center the intro card (624px width / 2)
               }}
             >
               {allItems.map((item) => (
@@ -134,8 +147,10 @@ export default function Home() {
                   id={item.id}
                   title={item.title}
                   year={item.year}
+                  description={(item as any).description}
                   image={item.image}
                   size={item.size}
+                  type={(item as any).type}
                   scrollProgress={springX}
                 />
               ))}
