@@ -65,6 +65,7 @@ export default function MasonryCard({
   };
 
   const config = sizeConfig[size];
+  const IMAGE_SCALE = 1.15;
 
   // Calculate safe parallax limits based on geometry (memoized)
   const { maxOffset, isHorizontalMove } = useMemo(() => {
@@ -83,13 +84,13 @@ export default function MasonryCard({
     let maxOffset = 0;
 
     if (isHorizontalMove) {
-      // Image fills height, calculate rendered width
-      const renderedImgWidth = cardH * imgRatio;
+      // Image fills height, calculate rendered width and include scale buffer
+      const renderedImgWidth = cardH * imgRatio * IMAGE_SCALE;
       // Available overflow on each side
       maxOffset = (renderedImgWidth - cardW) / 2;
     } else if (imgRatio < cardRatio) {
-      // Image fills width, calculate rendered height
-      const renderedImgHeight = cardW / imgRatio;
+      // Image fills width, calculate rendered height and include scale buffer
+      const renderedImgHeight = (cardW / imgRatio) * IMAGE_SCALE;
       // Available overflow on each side
       maxOffset = (renderedImgHeight - cardH) / 2;
     } else {
@@ -101,7 +102,7 @@ export default function MasonryCard({
     const safeLimit = Math.max(0, maxOffset * 0.8);
 
     return { maxOffset: safeLimit, isHorizontalMove };
-  }, [imgSize, config.cardW, config.cardH]);
+  }, [imgSize, config.cardW, config.cardH, IMAGE_SCALE]);
 
   // Create a default motion value to use when scrollProgress is not available
   const defaultScrollProgress = useMotionValue(0);

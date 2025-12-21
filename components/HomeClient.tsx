@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { motion, useScroll, useSpring, useTransform, useMotionValueEvent } from 'framer-motion';
 import Navigation from '@/components/Navigation';
 import MasonryCard from '@/components/MasonryCard';
@@ -55,24 +55,59 @@ export default function HomeClient({ items, categories = ['All', 'Work', 'Lab', 
   });
   const springX = useSpring(x, { stiffness: 400, damping: 40 });
 
-  // Track active section based on x value
+  // Precompute horizontal offsets for each category based on actual card widths
+  const categoryOffsets = useMemo(() => {
+    const offsets: Record<string, number> = {};
+    const gap = 24; // 1.5rem
+    const introPadding = windowWidth ? windowWidth / 2 - 312 : 0;
+
+    let currentX = introPadding;
+
+    items.forEach((item) => {
+      // Intro/Outro also occupy width
+      const width = item.size === '2x1' || item.size === '2x2' ? 624 : 300;
+
+      if (item.type !== 'intro' && item.type !== 'outro' && item.category) {
+        if (offsets[item.category] === undefined) {
+          offsets[item.category] = currentX;
+        }
+      }
+
+      currentX += width + gap;
+    });
+
+    return offsets;
+  }, [items, windowWidth]);
+
+  // Track active section based on x value using measured offsets
   useMotionValueEvent(springX, 'change', (latest) => {
-    if (categories.length <= 1) {
+    const absX = Math.abs(latest);
+
+    const orderedCategories = categories.filter((c) => c !== 'All');
+    if (!orderedCategories.length) {
       setActiveSection('All');
       return;
     }
-    
-    // Divide scroll into sections based on number of categories
-    const sectionCount = categories.length - 1; // Exclude 'All'
-    const sectionSize = maxScroll / sectionCount;
-    
-    for (let i = sectionCount; i > 0; i--) {
-      if (latest <= sectionSize * i) {
-        setActiveSection(categories[i] || 'All');
-        return;
+
+    const list = orderedCategories
+      .map((cat) => ({ cat, offset: categoryOffsets[cat] ?? Number.POSITIVE_INFINITY }))
+      .filter((entry) => Number.isFinite(entry.offset))
+      .sort((a, b) => a.offset - b.offset);
+
+    if (!list.length) {
+      setActiveSection('All');
+      return;
+    }
+
+    let current = list[0].cat;
+    for (const entry of list) {
+      if (absX >= entry.offset) {
+        current = entry.cat;
+      } else {
+        break;
       }
     }
-    setActiveSection(categories[0] || 'All');
+    setActiveSection(current);
   });
 
   // Scroll to category function
@@ -82,38 +117,8 @@ export default function HomeClient({ items, categories = ['All', 'Work', 'Lab', 
       return;
     }
 
-    // Find the index of the first card belonging to this category
-    const categoryIndex = items.findIndex((item) => {
-      if (item.type === 'intro' || item.type === 'outro') return false;
-      return item.category === category;
-    });
-
-    if (categoryIndex === -1) return;
-
-    // Calculate actual horizontal position by measuring card positions
-    // We need to account for intro card padding and actual card widths
-    if (!contentRef.current) return;
-
-    // Get all card elements
-    const cards = contentRef.current.children;
-    if (categoryIndex >= cards.length) return;
-
-    // Estimate horizontal distance: index * (card width + gap)
-    // Account for intro card padding: calc(50vw - 312px)
-    const cardWidth = 300;
-    const gap = 24;
-    const introPadding = typeof window !== 'undefined' ? window.innerWidth / 2 - 312 : 0;
-    
-    // Calculate target X position
-    let targetX = introPadding;
-    for (let i = 0; i < categoryIndex; i++) {
-      const item = items[i];
-      if (item.size === '2x1' || item.size === '2x2') {
-        targetX += 624 + gap; // Wide cards
-      } else {
-        targetX += cardWidth + gap;
-      }
-    }
+    const targetX = categoryOffsets[category];
+    if (targetX === undefined) return;
 
     // Inverse map: find scrollY that produces this translateX
     // x maps scrollY [300, 4000] -> x [0, maxScroll]
