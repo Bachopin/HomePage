@@ -16,6 +16,17 @@ const introCard = {
   image: '', // Not used for intro cards
 };
 
+// Outro Card - Last item (symmetrical ending)
+const outroCard = {
+  id: 999,
+  title: 'Get in Touch',
+  year: '2025',
+  description: 'Open for new collaborations.',
+  type: 'intro' as const,
+  size: '2x2' as const,
+  image: '', // Not used for intro cards
+};
+
 // Base sample data with Unsplash URLs
 const baseItems = [
   { 
@@ -76,12 +87,13 @@ const baseItems = [
   },
 ];
 
-// Generate items: Intro card first, then repeat base array
+// Generate items: Intro card first, then repeat base array, outro card last
 const allItems = [
   introCard,
   ...baseItems.map((item, idx) => ({ ...item, id: idx + 1 })),
   ...baseItems.map((item, idx) => ({ ...item, id: idx + 9, title: `${item.title} II` })),
   ...baseItems.map((item, idx) => ({ ...item, id: idx + 17, title: `${item.title} III` })),
+  outroCard,
 ];
 
 export default function Home() {

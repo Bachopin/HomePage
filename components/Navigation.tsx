@@ -14,7 +14,7 @@ export default function Navigation({ activeSection }: NavigationProps) {
   ];
 
   return (
-    <header className="fixed top-0 left-0 right-0 z-50 px-12 py-6">
+    <header className="fixed top-6 left-0 right-0 z-50 px-12 py-6">
       <div className="relative flex items-center justify-center">
         {/* Logo - Absolutely positioned to the left */}
         <Link href="/" className="absolute left-12 text-xl font-medium text-black dark:text-white">
