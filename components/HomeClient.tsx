@@ -126,32 +126,54 @@ export default function HomeClient({ items, categories = ['All', 'Work', 'Lab', 
     }
 
     // Find the first card belonging to this category
+    // Use strict equality check and handle potential whitespace issues
     const firstCardIndex = items.findIndex((item) => {
       if (item.type === 'intro' || item.type === 'outro') return false;
-      return item.category === category;
+      // Trim and compare to handle any whitespace issues
+      const itemCategory = item.category?.trim();
+      const targetCategory = category.trim();
+      return itemCategory === targetCategory;
     });
 
-    if (firstCardIndex === -1) return;
+    if (firstCardIndex === -1) {
+      console.warn(`No card found for category: "${category}"`);
+      console.log('Available categories:', [...new Set(items.filter(i => i.type === 'project').map(i => i.category).filter(Boolean))]);
+      return;
+    }
 
     const firstCardCenterX = cardPositions[firstCardIndex];
-    if (firstCardCenterX === undefined) return;
+    if (firstCardCenterX === undefined) {
+      console.warn(`Card position undefined for index: ${firstCardIndex}, card:`, items[firstCardIndex]);
+      return;
+    }
 
     // Calculate the target translateX value to center this card
-    // We want: cardCenterX + translateX = viewportCenter
-    // So: translateX = viewportCenter - cardCenterX
+    // cardPositions[index] is the absolute position of card center (relative to page left)
+    // When springX = 0, card is at cardPositions[index]
+    // When springX = -100, card moves left by 100px, so card is at cardPositions[index] - 100
+    // We want: cardPositions[index] + springX = viewportCenter
+    // So: springX = viewportCenter - cardPositions[index]
     const viewportCenter = windowWidth / 2;
     const targetTranslateX = viewportCenter - firstCardCenterX;
 
     // Inverse map: find scrollY that produces this translateX
     // x maps scrollY [300, 4000] -> x [0, maxScroll]
-    if (maxScroll === 0 || Math.abs(maxScroll) === 0) return;
+    // Formula: x = (scrollY - 300) / (4000 - 300) * maxScroll
+    // Solving for scrollY: scrollY = 300 + (x / maxScroll) * (4000 - 300)
+    if (maxScroll === 0 || Math.abs(maxScroll) === 0) {
+      console.warn('Max scroll is 0, cannot scroll');
+      return;
+    }
     
-    // targetTranslateX is negative (left), maxScroll is also negative
-    // We want to find scrollY that makes x = targetTranslateX
+    // targetTranslateX is what we want springX to be
+    // maxScroll is negative, so we need to handle the sign correctly
     const progress = Math.abs(targetTranslateX / Math.abs(maxScroll));
     const targetScrollY = 300 + progress * (4000 - 300);
     
-    window.scrollTo({ top: Math.min(Math.max(targetScrollY, 300), 4000), behavior: 'smooth' });
+    // Clamp to valid scroll range
+    const clampedScrollY = Math.min(Math.max(targetScrollY, 300), 4000);
+    
+    window.scrollTo({ top: clampedScrollY, behavior: 'smooth' });
   };
 
   return (
