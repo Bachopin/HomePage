@@ -46,31 +46,34 @@ export default function MasonryCard({
   const shouldPanX = imgRatio !== null && imgRatio > config.aspectRatio;
   const shouldPanY = imgRatio !== null && imgRatio < config.aspectRatio;
 
-  // Create default motion value if scrollProgress is not provided
+  // Create a default motion value to use when scrollProgress is not available
   const defaultScrollProgress = useMotionValue(0);
-  const effectiveScrollProgress = scrollProgress || defaultScrollProgress;
+  
+  // Use scrollProgress if provided, otherwise use default
+  // This ensures we always have a valid MotionValue for useTransform
+  const scrollMotionValue = scrollProgress || defaultScrollProgress;
 
   // X Parallax: for wide images
-  const parallaxX = shouldPanX
-    ? useTransform(effectiveScrollProgress, (latest) => {
-        if (latest >= 0) return 0;
-        const progress = Math.min(Math.abs(latest) / 3000, 1);
-        // Constrain to [-20px, 20px] range
-        const movement = progress * 20;
-        return Math.min(Math.max(movement, -20), 20);
-      })
-    : useMotionValue(0);
+  // Always call useTransform (React hooks rule), but only apply movement if conditions are met
+  const parallaxX = useTransform(scrollMotionValue, (latest) => {
+    // Only apply parallax if scrollProgress exists, shouldPanX is true, and latest is negative
+    if (!scrollProgress || !shouldPanX || latest >= 0) return 0;
+    const progress = Math.min(Math.abs(latest) / 3000, 1);
+    // Constrain to [-20px, 20px] range
+    const movement = progress * 20;
+    return Math.min(Math.max(movement, -20), 20);
+  });
 
   // Y Parallax: for tall images
-  const parallaxY = shouldPanY
-    ? useTransform(effectiveScrollProgress, (latest) => {
-        if (latest >= 0) return 0;
-        const progress = Math.min(Math.abs(latest) / 3000, 1);
-        // Constrain to [-20px, 20px] range
-        const movement = progress * 20;
-        return Math.min(Math.max(movement, -20), 20);
-      })
-    : useMotionValue(0);
+  // Always call useTransform (React hooks rule), but only apply movement if conditions are met
+  const parallaxY = useTransform(scrollMotionValue, (latest) => {
+    // Only apply parallax if scrollProgress exists, shouldPanY is true, and latest is negative
+    if (!scrollProgress || !shouldPanY || latest >= 0) return 0;
+    const progress = Math.min(Math.abs(latest) / 3000, 1);
+    // Constrain to [-20px, 20px] range
+    const movement = progress * 20;
+    return Math.min(Math.max(movement, -20), 20);
+  });
 
   // Preload image and capture dimensions
   useEffect(() => {
