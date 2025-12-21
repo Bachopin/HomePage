@@ -98,20 +98,27 @@ export default function MasonryCard({
 
   // Intro/Outro Card - Minimalist Typography
   if (type === 'intro' || type === 'outro') {
+    const CardWrapper = hasLink ? 'a' : 'div';
+    const wrapperProps = hasLink
+      ? {
+          href: link,
+          target: '_blank' as const,
+          rel: 'noopener noreferrer' as const,
+        }
+      : {};
+
     return (
       <motion.div
-        className={`group relative overflow-hidden rounded-[32px] cursor-pointer bg-black dark:bg-white ${config.gridArea}`}
+        className={`group relative overflow-hidden rounded-[32px] ${hasLink ? 'cursor-pointer' : 'cursor-default'} bg-black dark:bg-white ${config.gridArea}`}
         style={{ width: config.width }}
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
         whileHover={{ scale: 1.02 }}
         transition={{ duration: 0.2 }}
       >
-        <a 
-          href={link} 
+        <CardWrapper 
+          {...wrapperProps}
           className="block w-full h-full"
-          target={hasLink ? '_blank' : undefined}
-          rel={hasLink ? 'noopener noreferrer' : undefined}
         >
           {/* Link Indicator - Top Right (for intro/outro cards) */}
           {hasLink && (
@@ -135,26 +142,33 @@ export default function MasonryCard({
               </p>
             )}
           </div>
-        </a>
+        </CardWrapper>
       </motion.div>
     );
   }
 
   // Project Card - Image based with smart parallax
+  const CardWrapper = hasLink ? 'a' : 'div';
+  const wrapperProps = hasLink
+    ? {
+        href: link,
+        target: '_blank' as const,
+        rel: 'noopener noreferrer' as const,
+      }
+    : {};
+
   return (
     <motion.div
-      className={`group relative overflow-hidden rounded-[32px] cursor-pointer bg-neutral-200 dark:bg-neutral-800 ${config.gridArea}`}
+      className={`group relative overflow-hidden rounded-[32px] ${hasLink ? 'cursor-pointer' : 'cursor-default'} bg-neutral-200 dark:bg-neutral-800 ${config.gridArea}`}
       style={{ width: config.width }}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
       whileHover={{ scale: 1.02 }}
       transition={{ duration: 0.2 }}
     >
-      <a 
-        href={link} 
+      <CardWrapper 
+        {...wrapperProps}
         className="block w-full h-full"
-        target={hasLink ? '_blank' : undefined}
-        rel={hasLink ? 'noopener noreferrer' : undefined}
       >
         {/* Image Container */}
         <div className="w-full h-full relative overflow-hidden">
@@ -225,7 +239,7 @@ export default function MasonryCard({
             </div>
           )}
         </div>
-      </a>
+      </CardWrapper>
     </motion.div>
   );
 }
