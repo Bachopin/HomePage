@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 
 interface MasonryCardProps {
@@ -26,6 +26,17 @@ export default function MasonryCard({ id, title, year, image, size, link = '#' }
 
   const config = sizeConfig[size];
 
+  // Preload image on mount
+  useEffect(() => {
+    const img = new Image();
+    img.src = image;
+    img.onload = () => setImageLoaded(true);
+    img.onerror = () => {
+      console.error('Failed to load image:', image);
+      setImageError(true);
+    };
+  }, [image]);
+
   return (
     <motion.div
       className={`relative overflow-hidden rounded-lg cursor-pointer bg-neutral-200 dark:bg-neutral-800 ${config.gridArea}`}
@@ -39,21 +50,18 @@ export default function MasonryCard({ id, title, year, image, size, link = '#' }
         {/* Image Container */}
         <div className="w-full h-full relative">
           {/* Background Image */}
-          {!imageError && (
-            <img
-              src={image}
-              alt={title}
-              className={`w-full h-full object-cover transition-opacity duration-300 ${
-                imageLoaded ? 'opacity-100' : 'opacity-0'
-              }`}
-              onLoad={() => setImageLoaded(true)}
-              onError={() => setImageError(true)}
+          {imageLoaded && !imageError && (
+            <div 
+              className="absolute inset-0 bg-cover bg-center"
+              style={{ 
+                backgroundImage: `url(${image})`,
+              }}
             />
           )}
 
           {/* Fallback: Show title in center if image fails or while loading */}
           {(!imageLoaded || imageError) && (
-            <div className="absolute inset-0 flex items-center justify-center">
+            <div className="absolute inset-0 flex items-center justify-center bg-neutral-200 dark:bg-neutral-800">
               <div className="text-center px-4">
                 <span className="text-xs font-mono text-neutral-500 dark:text-neutral-400 mb-1 block">
                   {year}
@@ -61,6 +69,9 @@ export default function MasonryCard({ id, title, year, image, size, link = '#' }
                 <h3 className="text-base font-medium text-neutral-700 dark:text-neutral-300">
                   {title}
                 </h3>
+                {imageError && (
+                  <p className="text-xs text-red-500 mt-2">Loading...</p>
+                )}
               </div>
             </div>
           )}
@@ -68,7 +79,7 @@ export default function MasonryCard({ id, title, year, image, size, link = '#' }
           {/* Overlay with title and year (shown on hover when image is loaded) */}
           {imageLoaded && !imageError && (
             <motion.div
-              className="absolute inset-0 bg-black/40 flex flex-col justify-end p-6"
+              className="absolute inset-0 bg-black/40 flex flex-col justify-end p-6 z-20"
               initial={{ opacity: 0 }}
               animate={{ opacity: isHovered ? 1 : 0 }}
               transition={{ duration: 0.2 }}
