@@ -1,7 +1,7 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
-import { motion, useSpring, useMotionValue, useMotionValueEvent } from 'framer-motion';
+import { useState } from 'react';
+import { motion, useScroll, useSpring, useTransform, useMotionValueEvent } from 'framer-motion';
 import Navigation from '@/components/Navigation';
 import MasonryCard from '@/components/MasonryCard';
 
@@ -65,7 +65,7 @@ const baseItems = [
   },
 ];
 
-// Generate 24-30 items by repeating the base array
+// Generate 24 items by repeating the base array
 const allItems = [
   ...baseItems.map((item, idx) => ({ ...item, id: idx + 1 })),
   ...baseItems.map((item, idx) => ({ ...item, id: idx + 9, title: `${item.title} II` })),
@@ -73,13 +73,24 @@ const allItems = [
 ];
 
 export default function Home() {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const gridRef = useRef<HTMLDivElement>(null);
-  const x = useMotionValue(0);
-  const springX = useSpring(x, { stiffness: 150, damping: 20, mass: 0.5 });
   const [activeSection, setActiveSection] = useState<'work' | 'lab' | 'life'>('work');
 
-  // Scroll sync logic: Track x value changes
+  // Use native scroll from framer-motion (page scroll)
+  const { scrollY } = useScroll();
+
+  // Stage 1: Scale transform - Map scrollY [0, 300] -> scale [1.15, 1]
+  const scale = useTransform(scrollY, [0, 300], [1.15, 1]);
+  const springScale = useSpring(scale, { stiffness: 100, damping: 20 });
+
+  // Stage 2: X transform - Map scrollY [300, 3000] -> x [0, -2000]
+  const x = useTransform(scrollY, [300, 3000], [0, -2000]);
+  const springX = useSpring(x, { stiffness: 100, damping: 20 });
+
+  // Opacity: Map scrollY [0, 100] -> opacity [0, 1] (smooth entry)
+  const opacity = useTransform(scrollY, [0, 100], [0, 1]);
+  const springOpacity = useSpring(opacity, { stiffness: 100, damping: 20 });
+
+  // Track active section based on x value
   useMotionValueEvent(springX, 'change', (latest) => {
     if (latest > -1000) {
       setActiveSection('work');
@@ -90,59 +101,30 @@ export default function Home() {
     }
   });
 
-  useEffect(() => {
-    const handleWheel = (e: WheelEvent) => {
-      e.preventDefault();
-      
-      // Map vertical scroll to horizontal movement with multiplier
-      const deltaX = e.deltaY * 1.5;
-      
-      // Get current x value
-      const currentX = x.get();
-      
-      // Calculate new x value (inverted for natural feel)
-      const newX = currentX - deltaX;
-      
-      // Set bounds using gridRef
-      if (gridRef.current) {
-        const contentWidth = gridRef.current.scrollWidth;
-        const viewportWidth = window.innerWidth;
-        const minX = Math.min(0, -(contentWidth - viewportWidth + 64)); // +64 for padding
-        const maxX = 0;
-        const clampedX = Math.max(minX, Math.min(maxX, newX));
-        x.set(clampedX);
-      } else {
-        x.set(newX);
-      }
-    };
-
-    window.addEventListener('wheel', handleWheel, { passive: false });
-
-    return () => {
-      window.removeEventListener('wheel', handleWheel);
-    };
-  }, [x]);
-
   return (
-    <div className="h-screen overflow-hidden bg-stone-100 dark:bg-neutral-700">
+    <div className="bg-stone-100 dark:bg-neutral-700">
       <Navigation activeSection={activeSection} />
       
-      {/* Main Container - Fixed height: 640px */}
-      <main className="h-[640px] mt-[20vh] overflow-hidden">
-        <div ref={containerRef} className="h-full overflow-hidden">
+      {/* Scrollable Container - Large height for vertical scrolling */}
+      <div className="h-[400vh]">
+        {/* Fixed Viewport Container */}
+        <div className="sticky top-0 h-screen flex items-center justify-center overflow-hidden">
           <motion.div
-            className="h-full"
-            style={{ x: springX }}
+            className="h-[640px] w-full"
+            style={{
+              scale: springScale,
+              x: springX,
+              opacity: springOpacity,
+            }}
           >
             {/* Horizontal Masonry Grid */}
             <div
-              ref={gridRef}
               className="h-full px-8 inline-grid"
               style={{
                 display: 'grid',
                 gridTemplateRows: 'repeat(2, 300px)',
                 gridAutoFlow: 'column',
-                gap: '1.5rem', // gap-6 (24px)
+                gap: '1.5rem',
                 width: 'max-content',
               }}
             >
@@ -154,12 +136,13 @@ export default function Home() {
                   year={item.year}
                   image={item.image}
                   size={item.size}
+                  scrollProgress={springX}
                 />
               ))}
             </div>
           </motion.div>
         </div>
-      </main>
+      </div>
     </div>
   );
 }

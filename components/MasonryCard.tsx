@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { motion } from 'framer-motion';
+import { motion, MotionValue, useTransform } from 'framer-motion';
 
 interface MasonryCardProps {
   id: number;
@@ -10,9 +10,18 @@ interface MasonryCardProps {
   image: string;
   size: '1x1' | '1x2' | '2x1';
   link?: string;
+  scrollProgress?: MotionValue<number>;
 }
 
-export default function MasonryCard({ id, title, year, image, size, link = '#' }: MasonryCardProps) {
+export default function MasonryCard({ 
+  id, 
+  title, 
+  year, 
+  image, 
+  size, 
+  link = '#',
+  scrollProgress 
+}: MasonryCardProps) {
   const [isHovered, setIsHovered] = useState(false);
   const [imageLoaded, setImageLoaded] = useState(false);
   const [imageError, setImageError] = useState(false);
@@ -25,6 +34,15 @@ export default function MasonryCard({ id, title, year, image, size, link = '#' }
   };
 
   const config = sizeConfig[size];
+
+  // Internal parallax effect - move image opposite to scroll direction
+  const parallaxX = scrollProgress 
+    ? useTransform(scrollProgress, (latest) => {
+        // Move image slightly opposite to scroll direction for depth
+        // Range: -10px to 10px based on scroll position
+        return (latest / 2000) * 10;
+      })
+    : 0;
 
   // Preload image on mount
   useEffect(() => {
@@ -48,13 +66,15 @@ export default function MasonryCard({ id, title, year, image, size, link = '#' }
     >
       <a href={link} className="block w-full h-full">
         {/* Image Container */}
-        <div className="w-full h-full relative">
-          {/* Background Image */}
+        <div className="w-full h-full relative overflow-hidden">
+          {/* Background Image with Parallax */}
           {imageLoaded && !imageError && (
-            <div 
+            <motion.div 
               className="absolute inset-0 bg-cover bg-center"
               style={{ 
                 backgroundImage: `url(${image})`,
+                x: parallaxX,
+                scale: 1.1, // Slight scale for parallax effect
               }}
             />
           )}
