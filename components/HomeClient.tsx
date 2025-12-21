@@ -136,8 +136,16 @@ export default function HomeClient({ items, categories = ['All', 'Work', 'Lab', 
     });
 
     if (firstCardIndex === -1) {
+      // Debug: Log all available categories and items
+      const availableCategories = [...new Set(items.filter(i => i.type === 'project').map(i => i.category).filter(Boolean))];
       console.warn(`No card found for category: "${category}"`);
-      console.log('Available categories:', [...new Set(items.filter(i => i.type === 'project').map(i => i.category).filter(Boolean))]);
+      console.log('Available categories:', availableCategories);
+      console.log('All project items:', items.filter(i => i.type === 'project').map((item, idx) => ({
+        index: idx,
+        title: item.title,
+        category: item.category,
+        categoryTrimmed: item.category?.trim()
+      })));
       return;
     }
 
