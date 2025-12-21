@@ -98,10 +98,6 @@ export default function Home() {
   const x = useTransform(scrollY, [300, 3000], [0, -2000]);
   const springX = useSpring(x, { stiffness: 100, damping: 20 });
 
-  // Opacity: Map scrollY [0, 100] -> opacity [0, 1] (smooth entry)
-  const opacity = useTransform(scrollY, [0, 100], [0, 1]);
-  const springOpacity = useSpring(opacity, { stiffness: 100, damping: 20 });
-
   // Track active section based on x value
   useMotionValueEvent(springX, 'change', (latest) => {
     if (latest > -1000) {
@@ -126,7 +122,6 @@ export default function Home() {
             style={{
               scale: springScale,
               x: springX,
-              opacity: springOpacity,
             }}
           >
             {/* Horizontal Masonry Grid - Centered with dynamic padding */}
@@ -139,6 +134,7 @@ export default function Home() {
                 gap: '1.5rem',
                 width: 'max-content',
                 paddingLeft: 'calc(50vw - 312px)', // Center the intro card (624px width / 2)
+                paddingRight: 'calc(50vw - 312px)', // Center the final card for perfect symmetry
               }}
             >
               {allItems.map((item) => (
