@@ -36,58 +36,90 @@ export async function getDatabaseItems(): Promise<NotionItem[]> {
     }
 
     // Build query with filters and sorting
-    // Try with Status filter first, fallback to no filter if it fails
-    let response;
-    const baseParams: any = {
-      database_id: process.env.NOTION_DATABASE_ID,
-    };
-
-    // Try to sort by Sort Order, fallback to created_time
-    try {
-      baseParams.sorts = [
-        {
-          property: 'Sort Order',
-          direction: 'ascending',
+    const apiKey = process.env.NOTION_API_KEY!;
+    const databaseId = process.env.NOTION_DATABASE_ID!;
+    
+    // Build request body with filter and sorting
+    const requestBody: any = {
+      filter: {
+        property: 'Status',
+        select: {
+          equals: 'Live',
         },
-      ];
-    } catch {
-      // Fallback to created_time if Sort Order doesn't exist
-      baseParams.sorts = [
+      },
+      sorts: [
         {
           timestamp: 'created_time',
           direction: 'ascending',
         },
-      ];
-    }
+      ],
+    };
 
-    // Try query with Status filter first
-    try {
-      const paramsWithFilter = {
-        ...baseParams,
-        filter: {
-          property: 'Status',
-          select: {
-            equals: 'Live',
+    // Query database using direct HTTP request
+    const response = await fetch(`https://api.notion.com/v1/databases/${databaseId}/query`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Notion-Version': '2022-06-28',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(requestBody),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      const errorData = JSON.parse(errorText);
+      
+      // If Status filter fails, try without filter
+      if (errorData.code === 'validation_error' && errorData.message?.includes('Status')) {
+        console.warn('Status filter failed, trying without filter:', errorData.message);
+        const fallbackResponse = await fetch(`https://api.notion.com/v1/databases/${databaseId}/query`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${apiKey}`,
+            'Notion-Version': '2022-06-28',
+            'Content-Type': 'application/json',
           },
-        },
-      };
-      response = await (notion as any).databases.query(paramsWithFilter);
-      console.log(`Query with Status='Live' filter returned ${response.results.length} items`);
-    } catch (filterError: any) {
-      // If Status filter fails (property doesn't exist or no 'Live' items), try without filter
-      console.warn('Status filter failed, trying without filter:', filterError?.message);
-      try {
-        response = await (notion as any).databases.query(baseParams);
-        console.log(`Query without filter returned ${response.results.length} items`);
-      } catch (error: any) {
-        throw error; // Re-throw if base query also fails
+          body: JSON.stringify({
+            sorts: requestBody.sorts,
+          }),
+        });
+        
+        if (!fallbackResponse.ok) {
+          const fallbackErrorText = await fallbackResponse.text();
+          throw new Error(`Notion API error: ${fallbackResponse.status} ${fallbackResponse.statusText} - ${fallbackErrorText}`);
+        }
+        
+        const fallbackData = await fallbackResponse.json();
+        const mappedItems = fallbackData.results.map((page: any) => {
+          return mapPageToItem(page);
+        });
+        return mappedItems;
       }
+      
+      throw new Error(`Notion API error: ${response.status} ${response.statusText} - ${errorText}`);
     }
 
-    console.log(`Fetched ${response.results.length} items from Notion`);
+    const data = await response.json();
+    const mappedItems = data.results.map((page: any) => {
+      return mapPageToItem(page);
+    });
 
-    return response.results.map((page: any) => {
-      const props = page.properties;
+    return mappedItems;
+  } catch (error: any) {
+    console.error('Error fetching Notion database:', error);
+    console.error('Error details:', {
+      message: error?.message,
+      code: error?.code,
+      status: error?.status,
+    });
+    return [];
+  }
+}
+
+// Helper function to map Notion page to our item format
+function mapPageToItem(page: any): NotionItem {
+  const props = page.properties;
 
       // Extract title (Name property)
       const title = props.Name?.title?.[0]?.plain_text || 'Untitled';
@@ -131,26 +163,16 @@ export async function getDatabaseItems(): Promise<NotionItem[]> {
       // Extract category (Category select)
       const category = props.Category?.select?.name || '';
 
-      return {
-        id: page.id,
-        title,
-        year,
-        description,
-        type,
-        image,
-        link,
-        size,
-        category,
-      };
-    });
-  } catch (error: any) {
-    console.error('Error fetching Notion database:', error);
-    console.error('Error details:', {
-      message: error?.message,
-      code: error?.code,
-      status: error?.status,
-    });
-    return [];
-  }
+  return {
+    id: page.id,
+    title,
+    year,
+    description,
+    type,
+    image,
+    link,
+    size,
+    category,
+  };
 }
 
