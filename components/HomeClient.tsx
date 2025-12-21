@@ -83,52 +83,64 @@ export default function HomeClient({ items, categories = ['All', 'Work', 'Lab', 
     return { categoryOffsets: offsets, cardPositions: positions };
   }, [items, windowWidth]);
 
-  // Track active section based on x value using measured offsets
+  // Track active section based on card passing through viewport center
   useMotionValueEvent(springX, 'change', (latest) => {
-    const absX = Math.abs(latest);
+    const viewportCenter = windowWidth / 2;
+    
+    // Calculate which card is currently at the viewport center
+    // latest is negative (content moving left), so card position = cardAbsoluteX + latest
+    let activeCategory = 'All';
+    let minDistance = Infinity;
 
-    const orderedCategories = categories.filter((c) => c !== 'All');
-    if (!orderedCategories.length) {
-      setActiveSection('All');
-      return;
-    }
+    items.forEach((item, index) => {
+      // Skip intro/outro cards
+      if (item.type === 'intro' || item.type === 'outro') return;
+      
+      // Only check project cards with categories
+      if (!item.category) return;
 
-    const list = orderedCategories
-      .map((cat) => ({ cat, offset: categoryOffsets[cat] ?? Number.POSITIVE_INFINITY }))
-      .filter((entry) => Number.isFinite(entry.offset))
-      .sort((a, b) => a.offset - b.offset);
+      const cardCenterX = cardPositions[index];
+      if (cardCenterX === undefined) return;
 
-    if (!list.length) {
-      setActiveSection('All');
-      return;
-    }
-
-    let current = list[0].cat;
-    for (const entry of list) {
-      if (absX >= entry.offset) {
-        current = entry.cat;
-      } else {
-        break;
+      // Calculate current card position (accounting for scroll transform)
+      const cardCurrentX = cardCenterX + latest; // latest is negative
+      
+      // Calculate distance from card center to viewport center
+      const distance = Math.abs(cardCurrentX - viewportCenter);
+      
+      // Find the card closest to viewport center
+      if (distance < minDistance) {
+        minDistance = distance;
+        activeCategory = item.category;
       }
-    }
-    setActiveSection(current);
+    });
+
+    setActiveSection(activeCategory);
   });
 
-  // Scroll to category function
+  // Scroll to category function - jump to first card of the category
   const scrollToCategory = (category: string) => {
     if (category === 'All') {
       window.scrollTo({ top: 0, behavior: 'smooth' });
       return;
     }
 
-    const targetX = categoryOffsets[category];
-    if (targetX === undefined || targetX === Number.POSITIVE_INFINITY) return;
+    // Find the first card belonging to this category
+    const firstCardIndex = items.findIndex((item) => {
+      if (item.type === 'intro' || item.type === 'outro') return false;
+      return item.category === category;
+    });
 
-    // Calculate the target translateX value
-    // The grid starts at introPadding (positive), and we need to move left (negative)
-    // To center the category, we need: translateX = -(targetX - viewportCenter)
+    if (firstCardIndex === -1) return;
+
+    const firstCardCenterX = cardPositions[firstCardIndex];
+    if (firstCardCenterX === undefined) return;
+
+    // Calculate the target translateX value to center this card
+    // We want: cardCenterX + translateX = viewportCenter
+    // So: translateX = viewportCenter - cardCenterX
     const viewportCenter = windowWidth / 2;
-    const targetTranslateX = -(targetX - viewportCenter);
+    const targetTranslateX = viewportCenter - firstCardCenterX;
 
     // Inverse map: find scrollY that produces this translateX
     // x maps scrollY [300, 4000] -> x [0, maxScroll]
