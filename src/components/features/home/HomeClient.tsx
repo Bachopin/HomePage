@@ -18,19 +18,18 @@ interface HomeClientProps {
 }
 
 // ============================================================================
-// Scroll Phase Constants
+// Constants
 // ============================================================================
 
-/**
- * 滚动阶段边界
- * 
- * Phase 1 (0 - 0.05): 开头 - Intro 缩小，其它内容淡入
- * Phase 2 (0.05 - 0.90): 水平滚动
- * Phase 3 (0.90 - 1.0): 结尾 - Outro 放大，其它内容淡出
- */
 const PHASES = {
-  introEnd: 0.05,
-  outroStart: 0.90,
+  // 停留区间：0 - 0.06 时 Intro 保持最大（约3秒停留）
+  introPauseEnd: 0.06,
+  // 缩放区间：0.06 - 0.12 时 Intro 从大变小
+  introEnd: 0.12,
+  // 水平滚动：0.12 - 0.88
+  outroStart: 0.88,
+  // 停留区间：0.94 - 1.0 时 Outro 保持最大（约3秒停留）
+  outroPauseStart: 0.94,
 } as const;
 
 // ============================================================================
@@ -42,19 +41,10 @@ function useWindowSize() {
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
-
-    const handleResize = () => {
-      setWindowWidth(window.innerWidth);
-    };
-
+    const handleResize = () => setWindowWidth(window.innerWidth);
     handleResize();
     window.addEventListener('resize', handleResize);
-    const timeoutId = setTimeout(handleResize, 100);
-
-    return () => {
-      window.removeEventListener('resize', handleResize);
-      clearTimeout(timeoutId);
-    };
+    return () => window.removeEventListener('resize', handleResize);
   }, []);
 
   return { windowWidth };
@@ -66,9 +56,7 @@ function useSortedItems(items: NotionItem[], categories: string[]) {
 
     const categoryIndexMap = new Map<string, number>();
     categories.forEach((cat, idx) => {
-      if (cat !== 'All') {
-        categoryIndexMap.set(cat, idx);
-      }
+      if (cat !== 'All') categoryIndexMap.set(cat, idx);
     });
 
     return [...items].sort((a, b) => {
@@ -78,21 +66,12 @@ function useSortedItems(items: NotionItem[], categories: string[]) {
       if (a.type !== 'outro' && b.type === 'outro') return -1;
 
       if (a.type === 'project' && b.type === 'project') {
-        const catA = a.category || '';
-        const catB = b.category || '';
-        const idxA = categoryIndexMap.get(catA) ?? Infinity;
-        const idxB = categoryIndexMap.get(catB) ?? Infinity;
+        const idxA = categoryIndexMap.get(a.category || '') ?? Infinity;
+        const idxB = categoryIndexMap.get(b.category || '') ?? Infinity;
         if (idxA !== idxB) return idxA - idxB;
-
-        const sortA = a.sort ?? Infinity;
-        const sortB = b.sort ?? Infinity;
-        if (sortA !== sortB) return sortA - sortB;
-
-        const yearA = parseInt(a.year || '0', 10) || 0;
-        const yearB = parseInt(b.year || '0', 10) || 0;
-        return yearB - yearA;
+        if ((a.sort ?? Infinity) !== (b.sort ?? Infinity)) return (a.sort ?? Infinity) - (b.sort ?? Infinity);
+        return (parseInt(b.year || '0', 10) || 0) - (parseInt(a.year || '0', 10) || 0);
       }
-
       return 0;
     });
   }, [items, categories]);
@@ -108,6 +87,7 @@ export default function HomeClient({
 }: HomeClientProps) {
   const contentRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLElement>(null);
+  const isJumpingRef = useRef(false);
 
   const sortedItems = useSortedItems(items, categories);
   const { windowWidth } = useWindowSize();
@@ -125,54 +105,141 @@ export default function HomeClient({
   const maxScroll = containerWidth > windowWidth ? -(containerWidth - windowWidth) : 0;
 
   // =========================================================================
-  // Phase 1: Intro 缩放（开头：大 → 小）
+  // 动画值 - 不用弹簧，直接跟随，跳转无感
   // =========================================================================
-  const introScale = useTransform(
-    scrollYProgress,
-    [0, PHASES.introEnd],
-    [ANIMATION.imageScale, 1]
-  );
-  const springIntroScale = useSpring(introScale, ANIMATION.scaleSpring);
+  
+  // Intro 缩放：停留 → 缩小（加弹簧让它有粘滞感）
+  const introScaleRaw = useTransform(scrollYProgress, (p): number => {
+    if (p < PHASES.introPauseEnd) return ANIMATION.imageScale;
+    if (p < PHASES.introEnd) {
+      const progress = (p - PHASES.introPauseEnd) / (PHASES.introEnd - PHASES.introPauseEnd);
+      return ANIMATION.imageScale - progress * (ANIMATION.imageScale - 1);
+    }
+    return 1;
+  });
+  const introScale = useSpring(introScaleRaw, { stiffness: 60, damping: 15 });
 
-  // =========================================================================
-  // Phase 2: 水平位移
-  // =========================================================================
+  // Outro 缩放：放大 → 停留（加弹簧让它有粘滞感）
+  const outroScaleRaw = useTransform(scrollYProgress, (p): number => {
+    if (p < PHASES.outroStart) return 1;
+    if (p < PHASES.outroPauseStart) {
+      const progress = (p - PHASES.outroStart) / (PHASES.outroPauseStart - PHASES.outroStart);
+      return 1 + progress * (ANIMATION.imageScale - 1);
+    }
+    return ANIMATION.imageScale;
+  });
+  const outroScale = useSpring(outroScaleRaw, { stiffness: 60, damping: 15 });
+
+  // 水平位移
   const x = useTransform(scrollYProgress, (p): number => {
     if (p < PHASES.introEnd) return 0;
     if (p < PHASES.outroStart) {
-      const progress = (p - PHASES.introEnd) / (PHASES.outroStart - PHASES.introEnd);
-      return progress * maxScroll;
+      return ((p - PHASES.introEnd) / (PHASES.outroStart - PHASES.introEnd)) * maxScroll;
     }
     return maxScroll;
   });
-  const springX = useSpring(x, ANIMATION.spring);
+  const springX = useSpring(x, { stiffness: 400, damping: 40 });
 
-  // =========================================================================
-  // Phase 3: Outro 缩放（结尾：小 → 大）
-  // =========================================================================
-  const outroScale = useTransform(scrollYProgress, (p): number => {
-    if (p < PHASES.outroStart) return 1;
-    const progress = (p - PHASES.outroStart) / (1 - PHASES.outroStart);
-    return 1 + progress * (ANIMATION.imageScale - 1);
-  });
-  const springOutroScale = useSpring(outroScale, ANIMATION.scaleSpring);
-
-  // =========================================================================
-  // 内容透明度：开头淡入，结尾淡出（Intro/Outro 除外）
-  // =========================================================================
+  // 内容透明度
   const contentOpacity = useTransform(scrollYProgress, (p): number => {
-    // Phase 1: 淡入
+    // 停留区间：完全透明
+    if (p < PHASES.introPauseEnd) return 0;
+    // 淡入
     if (p < PHASES.introEnd) {
-      return p / PHASES.introEnd;
+      return (p - PHASES.introPauseEnd) / (PHASES.introEnd - PHASES.introPauseEnd);
     }
-    // Phase 2: 完全可见
-    if (p < PHASES.outroStart) {
-      return 1;
+    // 正常可见
+    if (p < PHASES.outroStart) return 1;
+    // 淡出
+    if (p < PHASES.outroPauseStart) {
+      return 1 - (p - PHASES.outroStart) / (PHASES.outroPauseStart - PHASES.outroStart);
     }
-    // Phase 3: 淡出
-    return 1 - (p - PHASES.outroStart) / (1 - PHASES.outroStart);
+    // 停留区间：完全透明
+    return 0;
   });
-  const springContentOpacity = useSpring(contentOpacity, { stiffness: 300, damping: 30 });
+
+  // =========================================================================
+  // 无缝循环：停留 + 累积动量 + 瞬间跳转
+  // =========================================================================
+  const PAUSE_DURATION = 1000; // 停留时间（毫秒）
+  const MOMENTUM_THRESHOLD = 600; // 动量阈值
+  
+  const pauseStartTimeRef = useRef<number | null>(null);
+  const isPauseCompleteRef = useRef(false);
+  const accumulatedDeltaRef = useRef(0);
+
+  useEffect(() => {
+    const container = scrollContainerRef.current;
+    if (!container) return;
+
+    const handleWheel = (e: WheelEvent) => {
+      if (isJumpingRef.current) return;
+
+      const scrollTop = container.scrollTop;
+      const maxScrollTop = container.scrollHeight - container.clientHeight;
+      const atTop = scrollTop <= 0;
+      const atBottom = scrollTop >= maxScrollTop - 1;
+      const isOverscrolling = (atTop && e.deltaY < 0) || (atBottom && e.deltaY > 0);
+
+      if (!isOverscrolling) {
+        // 离开边界，重置所有状态
+        pauseStartTimeRef.current = null;
+        isPauseCompleteRef.current = false;
+        accumulatedDeltaRef.current = 0;
+        return;
+      }
+
+      e.preventDefault();
+      const now = Date.now();
+
+      // 阶段1：停留计时
+      if (!isPauseCompleteRef.current) {
+        if (!pauseStartTimeRef.current) {
+          pauseStartTimeRef.current = now;
+          return;
+        }
+        
+        if (now - pauseStartTimeRef.current >= PAUSE_DURATION) {
+          isPauseCompleteRef.current = true;
+          accumulatedDeltaRef.current = 0;
+        }
+        return;
+      }
+
+      // 阶段2：累积动量
+      accumulatedDeltaRef.current += Math.abs(e.deltaY);
+
+      if (accumulatedDeltaRef.current >= MOMENTUM_THRESHOLD) {
+        isJumpingRef.current = true;
+        
+        // 重置状态
+        pauseStartTimeRef.current = null;
+        isPauseCompleteRef.current = false;
+        accumulatedDeltaRef.current = 0;
+
+        if (atTop) {
+          // 跳到底部（Outro 最大状态）
+          springX.jump(maxScroll);
+          introScale.jump(1); // Intro 变小
+          outroScale.jump(ANIMATION.imageScale); // Outro 最大
+          container.scrollTop = maxScrollTop;
+        } else {
+          // 跳到顶部（Intro 最大状态）
+          springX.jump(0);
+          introScale.jump(ANIMATION.imageScale); // Intro 最大
+          outroScale.jump(1); // Outro 变小
+          container.scrollTop = 0;
+        }
+
+        requestAnimationFrame(() => {
+          isJumpingRef.current = false;
+        });
+      }
+    };
+
+    container.addEventListener('wheel', handleWheel, { passive: false });
+    return () => container.removeEventListener('wheel', handleWheel);
+  }, [springX, maxScroll]);
 
   // =========================================================================
   // Navigation
@@ -258,12 +325,9 @@ export default function HomeClient({
                       width: position.width,
                       height: position.height,
                     }}
-                    // Intro 独立缩放
-                    introScale={isIntro ? springIntroScale : undefined}
-                    // Outro 独立缩放
-                    outroScale={isOutro ? springOutroScale : undefined}
-                    // Project 卡片透明度
-                    cardOpacity={!isIntro && !isOutro ? springContentOpacity : undefined}
+                    introScale={isIntro ? introScale : undefined}
+                    outroScale={isOutro ? outroScale : undefined}
+                    cardOpacity={!isIntro && !isOutro ? contentOpacity : undefined}
                   />
                 );
               })}

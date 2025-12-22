@@ -31,8 +31,11 @@ export interface UseScrollSpyResult {
   scrollToCategory: (category: string) => void;
 }
 
-// 缩放阶段占比（前5%用于缩放动画）
-const SCALE_PHASE_RATIO = 0.05;
+// 滚动阶段边界（需要和 HomeClient 中的 PHASES 保持一致）
+const PHASES = {
+  introEnd: 0.12,      // 水平滚动开始
+  outroStart: 0.88,    // 水平滚动结束
+} as const;
 
 /**
  * 滚动监听 Hook
@@ -152,15 +155,15 @@ export function useScrollSpy({
       // 防御：无法滚动
       if (scrollableHeight <= 0) return;
 
-      // translateX 从 0 到 maxScroll 对应滚动进度从 SCALE_PHASE_RATIO 到 1
+      // translateX 从 0 到 maxScroll 对应滚动进度从 introEnd 到 outroStart
       // ratio = clampedX / maxScroll (0 到 1，因为两者都是负数或0)
       const ratio = clampedX / maxScroll;
       
       // 防御：ratio 计算异常
       if (isNaN(ratio) || !isFinite(ratio)) return;
 
-      // 对应的滚动进度
-      const scrollProgress = SCALE_PHASE_RATIO + ratio * (1 - SCALE_PHASE_RATIO);
+      // 对应的滚动进度：introEnd + ratio * (outroStart - introEnd)
+      const scrollProgress = PHASES.introEnd + ratio * (PHASES.outroStart - PHASES.introEnd);
       const targetScrollY = scrollableHeight * scrollProgress;
 
       // 防御：目标位置无效

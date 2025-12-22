@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import './globals.css';
-import { CrosshairToggle } from '@/components/ui';
+import { CrosshairToggle, DisableContextMenu } from '@/components/ui';
 
 export const metadata: Metadata = {
   title: 'Personal Homepage',
@@ -17,6 +17,7 @@ export default function RootLayout({
       <body className="no-scrollbar">
         {children}
         <CrosshairToggle />
+        <DisableContextMenu />
       </body>
     </html>
   );
