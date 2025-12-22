@@ -7,6 +7,7 @@ import MasonryCard from '@/components/MasonryCard';
 import { NotionItem } from '@/lib/notion';
 import { useMasonryLayout } from '@/hooks/useMasonryLayout';
 import { useScrollSpy } from '@/hooks/useScrollSpy';
+import { ANIMATION, SCROLL, DEFAULTS } from '@/lib/config';
 
 // ============================================================================
 // Types
@@ -25,15 +26,13 @@ interface HomeClientProps {
  * 窗口尺寸监听 Hook
  */
 function useWindowSize() {
-  const [windowWidth, setWindowWidth] = useState(1920);
-  const [windowHeight, setWindowHeight] = useState(1080);
+  const [windowWidth, setWindowWidth] = useState<number>(DEFAULTS.windowWidth);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
     const handleResize = () => {
       setWindowWidth(window.innerWidth);
-      setWindowHeight(window.innerHeight);
     };
 
     handleResize();
@@ -46,7 +45,7 @@ function useWindowSize() {
     };
   }, []);
 
-  return { windowWidth, windowHeight };
+  return { windowWidth };
 }
 
 /**
@@ -104,7 +103,7 @@ function useSortedItems(items: NotionItem[], categories: string[]) {
 
 export default function HomeClient({
   items,
-  categories = ['All', 'Work', 'Lab', 'Life'],
+  categories = [...DEFAULTS.categories],
 }: HomeClientProps) {
   // Refs
   const contentRef = useRef<HTMLDivElement>(null);
@@ -118,7 +117,7 @@ export default function HomeClient({
   // -------------------------------------------------------------------------
   // Step 2: Layout - 计算卡片位置
   // -------------------------------------------------------------------------
-  const { windowWidth, windowHeight } = useWindowSize();
+  const { windowWidth } = useWindowSize();
 
   const { cardPositions, categoryStartX, containerWidth, gridHeight } = useMasonryLayout({
     items: sortedItems,
@@ -133,21 +132,26 @@ export default function HomeClient({
     container: scrollContainerRef,
   });
 
-  // 缩放变换：scrollYProgress [0, 0.05] -> scale [1.15, 1]
-  const baseScale = 1;
-  const scale = useTransform(scrollYProgress, [0, 0.05], [baseScale * 1.15, baseScale]);
-  const springScale = useSpring(scale, { stiffness: 400, damping: 40 });
+  // 缩放变换：scrollYProgress [0, scaleEndProgress] -> scale [imageScale, 1]
+  const scale = useTransform(
+    scrollYProgress,
+    [0, SCROLL.scaleEndProgress],
+    [ANIMATION.imageScale, 1]
+  );
+  const springScale = useSpring(scale, ANIMATION.scaleSpring);
 
   // 水平位移变换
   const maxScroll = containerWidth > windowWidth ? -(containerWidth - windowWidth) : 0;
 
   const x = useTransform(scrollYProgress, (latest) => {
-    if (latest < 0.05) return 0;
+    if (latest < SCROLL.horizontalScrollStartProgress) return 0;
     if (latest >= 1.0) return maxScroll;
-    const progress = (latest - 0.05) / (1.0 - 0.05);
+    
+    const progress = (latest - SCROLL.horizontalScrollStartProgress) / 
+                     (1.0 - SCROLL.horizontalScrollStartProgress);
     return progress * maxScroll;
   });
-  const springX = useSpring(x, { stiffness: 400, damping: 40 });
+  const springX = useSpring(x, ANIMATION.spring);
 
   // -------------------------------------------------------------------------
   // Step 4: Interaction - 滚动监听与导航

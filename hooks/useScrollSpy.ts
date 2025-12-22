@@ -1,5 +1,6 @@
 import { useState, useCallback, RefObject } from 'react';
 import { MotionValue, useMotionValueEvent } from 'framer-motion';
+import { SCROLL } from '@/lib/config';
 
 /**
  * Hook 输入参数
@@ -73,8 +74,7 @@ export function useScrollSpy({
       }
 
       // 滚动末尾强制显示最后一个分类
-      const scrollThreshold = 50;
-      if (Math.abs(latest - maxScroll) < scrollThreshold) {
+      if (Math.abs(latest - maxScroll) < SCROLL.endThreshold) {
         const orderedCategories = categories.filter(c => c !== 'All');
         if (orderedCategories.length > 0) {
           setActiveSection(orderedCategories[orderedCategories.length - 1]);
@@ -183,9 +183,10 @@ export function useScrollSpy({
         }
 
         // 将 translateX 映射到滚动进度 (0.0 到 1.0)
-        // 水平滚动发生在进度 0.05 到 1.0 之间
+        // 水平滚动发生在进度 horizontalScrollStartProgress 到 1.0 之间
         const normalizedTranslateX = Math.abs(clampedTranslateX / maxScroll);
-        const targetProgress = 0.05 + normalizedTranslateX * 0.95;
+        const scrollRange = 1.0 - SCROLL.horizontalScrollStartProgress;
+        const targetProgress = SCROLL.horizontalScrollStartProgress + normalizedTranslateX * scrollRange;
 
         if (isNaN(targetProgress) || !isFinite(targetProgress)) {
           console.warn('Invalid progress calculation, cannot scroll.');
