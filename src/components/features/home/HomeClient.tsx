@@ -118,7 +118,7 @@ export default function HomeClient({
   // -------------------------------------------------------------------------
   const { windowWidth } = useWindowSize();
 
-  const { cardPositions, categoryStartX, categoryTargetX, containerWidth, gridHeight } = useMasonryLayout({
+  const { cardPositions, categoryTargetInfo, containerWidth, gridHeight } = useMasonryLayout({
     items: sortedItems,
     windowWidth,
     categories,
@@ -157,7 +157,7 @@ export default function HomeClient({
   // -------------------------------------------------------------------------
   const { activeSection, scrollToCategory } = useScrollSpy({
     scrollX: springX,
-    categoryTargetX,
+    categoryTargetInfo,
     categories,
     windowWidth,
     maxScroll,

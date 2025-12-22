@@ -2,7 +2,7 @@ import type { RefObject } from 'react';
 import { useState, useCallback } from 'react';
 import type { MotionValue } from 'framer-motion';
 import { useMotionValueEvent } from 'framer-motion';
-import { SCROLL, getLayoutConfig } from '@/lib/config';
+import { SCROLL } from '@/lib/config';
 
 /**
  * Hook 输入参数
@@ -10,8 +10,8 @@ import { SCROLL, getLayoutConfig } from '@/lib/config';
 export interface UseScrollSpyProps {
   /** 水平滚动位置（motion value，负值表示向左滚动） */
   scrollX: MotionValue<number>;
-  /** 每个分类的目标 X 坐标（用于导航跳转和检测激活状态） */
-  categoryTargetX: Record<string, number>;
+  /** 每个分类的目标卡片信息 */
+  categoryTargetInfo: Record<string, { left: number; centerX: number }>;
   /** 分类列表（包含 'All'） */
   categories: string[];
   /** 视口宽度 */
@@ -33,20 +33,15 @@ export interface UseScrollSpyResult {
 }
 
 /**
- * 滚动监听 Hook
+ * 滚动监听 Hook - 简单直接的实现
  * 
- * 职责：
- * 1. 监听滚动位置变化，计算当前激活的分类
- * 2. 提供滚动到指定分类的函数
- * 
- * 算法说明：
- * - 基于每个分类中 Sort 值最低且不为空的卡片位置进行检测
- * - 当该卡片的左边经过屏幕中线时，切换到对应分类
- * - 点击导航时，跳转到该卡片居中的位置
+ * 逻辑：
+ * 1. 滚动监听：当目标卡片的左边缘经过屏幕中线时，切换到该分类
+ * 2. 点击导航：跳转到让目标卡片居中的位置
  */
 export function useScrollSpy({
   scrollX,
-  categoryTargetX,
+  categoryTargetInfo,
   categories,
   windowWidth,
   maxScroll,
@@ -55,139 +50,73 @@ export function useScrollSpy({
   const [activeSection, setActiveSection] = useState<string>('All');
 
   // 监听滚动位置变化
-  useMotionValueEvent(scrollX, 'change', (latest) => {
-    try {
-      // 无分类数据时默认 'All'
-      if (!categoryTargetX || Object.keys(categoryTargetX).length === 0) {
-        setActiveSection('All');
-        return;
-      }
-
-      // 滚动起始位置（latest >= 0）显示 'All'
-      if (latest >= 0 || isNaN(latest)) {
-        setActiveSection('All');
-        return;
-      }
-
-      // 窗口宽度无效时默认 'All'
-      if (!windowWidth || windowWidth <= 0 || isNaN(windowWidth)) {
-        setActiveSection('All');
-        return;
-      }
-
-      // 计算屏幕中心线对应的绝对 X 坐标
-      const screenCenterX = windowWidth / 2;
-      const absoluteXAtCenter = screenCenterX - latest; // latest 是负值，所以减去它
-
-      // 获取有效分类列表（排除 'All'）
-      const orderedCategories = categories.filter(c => c !== 'All');
-      if (orderedCategories.length === 0) {
-        setActiveSection('All');
-        return;
-      }
-
-      // 找到目标卡片左边缘已经越过屏幕中心的最后一个分类
-      let activeCategory = 'All';
-
-      for (const category of orderedCategories) {
-        const targetLeftEdge = categoryTargetX[category];
-        
-        if (targetLeftEdge === undefined || isNaN(targetLeftEdge)) {
-          continue;
-        }
-
-        // 简单判断：当目标卡片的左边缘位置小于等于屏幕中心的绝对位置时，切换到该分类
-        if (absoluteXAtCenter >= targetLeftEdge) {
-          activeCategory = category;
-        }
-      }
-
-      setActiveSection(activeCategory);
-    } catch (error) {
-      console.error('Error in useScrollSpy:', error);
+  useMotionValueEvent(scrollX, 'change', (currentX) => {
+    // currentX 是负值，表示内容向左移动了多少
+    // 屏幕中线在视口中的位置是 windowWidth / 2
+    // 屏幕中线对应的内容绝对位置 = windowWidth / 2 - currentX
+    
+    if (!categoryTargetInfo || Object.keys(categoryTargetInfo).length === 0) {
       setActiveSection('All');
+      return;
     }
+
+    if (currentX >= 0) {
+      setActiveSection('All');
+      return;
+    }
+
+    const screenCenterAbsoluteX = windowWidth / 2 - currentX;
+
+    // 按分类顺序遍历，找到最后一个左边缘已经越过屏幕中线的分类
+    let newActiveSection = 'All';
+    
+    for (const category of categories) {
+      if (category === 'All') continue;
+      
+      const info = categoryTargetInfo[category];
+      if (!info) continue;
+      
+      // 当卡片左边缘 <= 屏幕中线的绝对位置时，说明卡片左边缘已经越过中线
+      if (info.left <= screenCenterAbsoluteX) {
+        newActiveSection = category;
+      }
+    }
+
+    setActiveSection(newActiveSection);
   });
 
   // 滚动到指定分类
   const scrollToCategory = useCallback(
     (category: string) => {
-      try {
-        // 滚动到 'All' = 回到顶部
-        if (category === 'All') {
-          if (scrollContainerRef.current) {
-            scrollContainerRef.current.scrollTo({ top: 0, behavior: 'smooth' });
-          }
-          return;
-        }
-
-        // 验证数据有效性
-        if (!categoryTargetX || Object.keys(categoryTargetX).length === 0) {
-          console.warn('Cannot scroll: missing categoryTargetX');
-          return;
-        }
-
-        if (!windowWidth || windowWidth <= 0 || isNaN(windowWidth)) {
-          console.warn('Cannot scroll: invalid windowWidth');
-          return;
-        }
-
-        const targetLeftEdge = categoryTargetX[category.trim()];
-
-        if (targetLeftEdge === undefined || isNaN(targetLeftEdge)) {
-          console.warn(`No target position found for category: "${category}"`);
-          return;
-        }
-
-        // 计算目标位置：将目标卡片居中显示
-        // 目标卡片的左边缘 + 卡片宽度的一半 = 卡片中心
-        // 屏幕中心 - 卡片中心 = 需要的 translateX
-        const layout = getLayoutConfig(windowWidth);
-        const cardHalfWidth = layout.columnWidth / 2; // 假设大多数是1x1卡片
-        const cardCenterX = targetLeftEdge + cardHalfWidth;
-        const screenCenter = windowWidth / 2;
-        const targetTranslateX = screenCenter - cardCenterX;
-
-        // 限制在有效范围内 [maxScroll, 0]
-        const clampedTranslateX = Math.max(Math.min(targetTranslateX, 0), maxScroll);
-
-        // 验证 maxScroll 有效性
-        if (maxScroll === 0 || Math.abs(maxScroll) < 1 || isNaN(maxScroll)) {
-          console.warn('Max scroll is 0 or invalid, cannot scroll. maxScroll:', maxScroll);
-          return;
-        }
-
-        // 将 translateX 映射到滚动进度 (0.0 到 1.0)
-        // 水平滚动发生在进度 horizontalScrollStartProgress 到 1.0 之间
-        const normalizedTranslateX = Math.abs(clampedTranslateX / maxScroll);
-        const scrollRange = 1.0 - SCROLL.horizontalScrollStartProgress;
-        const targetProgress = SCROLL.horizontalScrollStartProgress + normalizedTranslateX * scrollRange;
-
-        if (isNaN(targetProgress) || !isFinite(targetProgress)) {
-          console.warn('Invalid progress calculation, cannot scroll.');
-          return;
-        }
-
-        // 计算目标滚动位置
-        if (!scrollContainerRef.current) {
-          console.warn('Scroll container ref not available');
-          return;
-        }
-
-        const containerHeight = scrollContainerRef.current.scrollHeight;
-        const targetScrollY = containerHeight * targetProgress;
-
-        if (!isNaN(targetScrollY) && containerHeight > 0) {
-          scrollContainerRef.current.scrollTo({
-            top: targetScrollY,
-            behavior: 'smooth',
-          });
-        }
-      } catch (error) {
-        console.error('Error in scrollToCategory:', error);
+      if (category === 'All') {
+        scrollContainerRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
+        return;
       }
+
+      const info = categoryTargetInfo[category];
+      if (!info) return;
+
+      // 目标：让卡片中心对齐屏幕中心
+      // 需要的 translateX = 屏幕中心 - 卡片中心
+      const targetTranslateX = windowWidth / 2 - info.centerX;
+      
+      // 限制在有效范围内
+      const clampedX = Math.max(Math.min(targetTranslateX, 0), maxScroll);
+
+      if (maxScroll === 0) return;
+
+      // 将 translateX 转换为滚动进度
+      // translateX 从 0 变到 maxScroll，对应进度从 horizontalScrollStartProgress 到 1
+      const ratio = clampedX / maxScroll; // 0 到 1
+      const scrollProgress = SCROLL.horizontalScrollStartProgress + ratio * (1 - SCROLL.horizontalScrollStartProgress);
+
+      const container = scrollContainerRef.current;
+      if (!container) return;
+
+      const targetScrollY = container.scrollHeight * scrollProgress;
+      container.scrollTo({ top: targetScrollY, behavior: 'smooth' });
     },
-    [categoryTargetX, windowWidth, maxScroll, scrollContainerRef]
+    [categoryTargetInfo, windowWidth, maxScroll, scrollContainerRef]
   );
 
   return { activeSection, scrollToCategory };

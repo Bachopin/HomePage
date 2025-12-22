@@ -42,10 +42,8 @@ export interface MasonryLayoutResult {
   cardPositions: CardPosition[];
   /** 容器总宽度 */
   containerWidth: number;
-  /** 每个分类的起始 X 坐标（基于该分类中 Sort 最低的卡片） */
-  categoryStartX: Record<string, number>;
-  /** 每个分类的目标卡片中心 X 坐标（用于导航跳转） */
-  categoryTargetX: Record<string, number>;
+  /** 每个分类的目标卡片信息（left: 左边缘, centerX: 中心） */
+  categoryTargetInfo: Record<string, { left: number; centerX: number }>;
   /** 网格高度（两行 + 间距） */
   gridHeight: number;
 }
@@ -220,8 +218,8 @@ export function useMasonryLayout({
 }: UseMasonryLayoutProps): MasonryLayoutResult {
   return useMemo(() => {
     const positions: CardPosition[] = [];
-    const categoryStarts: Record<string, number> = {};
-    const categoryTargets: Record<string, number> = {};
+    // 每个分类的目标卡片信息：{ left: 左边缘, centerX: 中心 }
+    const categoryTargetInfo: Record<string, { left: number; centerX: number }> = {};
 
     // 获取响应式布局配置
     const layout = getLayoutConfig(windowWidth);
@@ -230,8 +228,7 @@ export function useMasonryLayout({
     if (!items || items.length === 0) {
       return {
         cardPositions: positions,
-        categoryStartX: categoryStarts,
-        categoryTargetX: categoryTargets,
+        categoryTargetInfo,
         containerWidth: 0,
         gridHeight: calculateGridHeight(layout),
       };
@@ -260,15 +257,12 @@ export function useMasonryLayout({
     // 网格占用管理器
     const gridManager = new GridOccupancyManager(GRID.rows);
 
-    // 用于记录每个分类的目标卡片（Sort 值最小且不为空的卡片）
-    const categoryTargetCards: Record<string, { index: number; sort: number; position: CardPosition }> = {};
+    // 记录每个分类中 Sort 值最小的卡片（Sort 必须存在且 > 0）
+    const categoryBestCard: Record<string, { sort: number; left: number; centerX: number }> = {};
 
     // 放置每张卡片
     items.forEach((item, index) => {
-      if (!item || !item.size) {
-        console.warn(`Item at index ${index} has invalid size:`, item);
-        return;
-      }
+      if (!item || !item.size) return;
 
       const dims = getCardPixelDimensions(item.size as CardSize, layout);
       const { row: startRow, col: startCol } = gridManager.findFirstAvailablePosition(
@@ -278,60 +272,36 @@ export function useMasonryLayout({
 
       gridManager.markOccupied(startRow, startCol, dims.rows, dims.cols);
 
-      // 计算绝对位置
-      const position = calculateCardPosition(
-        startRow,
-        startCol,
-        dims,
-        paddingLeft,
-        layout
-      );
-
+      const position = calculateCardPosition(startRow, startCol, dims, paddingLeft, layout);
       positions[index] = position;
 
-      // 处理分类逻辑 - 只处理 project 类型且有分类的卡片
-      if (item.type === 'project' && item.category && item.category.trim() !== '') {
+      // 只处理 project 类型且有分类的卡片
+      if (item.type === 'project' && item.category) {
         const category = item.category.trim();
+        if (!category) return;
 
-        // 记录分类起始位置（每个分类第一张卡片的左边缘）
-        if (categoryStarts[category] === undefined) {
-          categoryStarts[category] = position.left;
-        }
-
-        // 查找每个分类中 Sort 值最小且不为空的卡片作为目标卡片
         const sort = item.sort;
-        if (sort !== undefined && sort !== null && !isNaN(sort) && sort > 0) {
-          if (!categoryTargetCards[category] || sort < categoryTargetCards[category].sort) {
-            categoryTargetCards[category] = {
-              index,
+        // Sort 必须存在且 > 0
+        if (typeof sort === 'number' && !isNaN(sort) && sort > 0) {
+          const current = categoryBestCard[category];
+          if (!current || sort < current.sort) {
+            categoryBestCard[category] = {
               sort,
-              position,
+              left: position.left,
+              centerX: position.centerX,
             };
           }
         }
       }
     });
 
-    // 设置每个分类的目标位置（使用目标卡片的左边缘）
-    Object.keys(categoryTargetCards).forEach(category => {
-      // 使用目标卡片的左边缘位置，这样当左边缘经过屏幕中线时切换分类
-      categoryTargets[category] = categoryTargetCards[category].position.left;
-    });
-
-    // 对于没有 Sort 值的分类，使用第一张卡片的左边缘位置
-    Object.keys(categoryStarts).forEach(category => {
-      if (categoryTargets[category] === undefined) {
-        // 找到该分类的第一张卡片
-        const firstCardIndex = items.findIndex(item => 
-          item.type === 'project' && item.category && item.category.trim() === category
-        );
-        if (firstCardIndex !== -1 && positions[firstCardIndex]) {
-          categoryTargets[category] = positions[firstCardIndex].left;
-        } else {
-          // 兜底：使用起始位置
-          categoryTargets[category] = categoryStarts[category];
-        }
-      }
+    // 将最佳卡片信息转换为目标信息
+    Object.keys(categoryBestCard).forEach(category => {
+      const best = categoryBestCard[category];
+      categoryTargetInfo[category] = {
+        left: best.left,
+        centerX: best.centerX,
+      };
     });
 
     // 计算容器宽度和网格高度
@@ -340,8 +310,7 @@ export function useMasonryLayout({
 
     return {
       cardPositions: positions,
-      categoryStartX: categoryStarts,
-      categoryTargetX: categoryTargets,
+      categoryTargetInfo,
       containerWidth,
       gridHeight,
     };
