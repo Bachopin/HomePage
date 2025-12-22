@@ -21,7 +21,7 @@ interface CardPosition {
 
 export default function HomeClient({ items, categories = ['All', 'Work', 'Lab', 'Life'] }: HomeClientProps) {
   const contentRef = useRef<HTMLDivElement>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
+  const scrollContainerRef = useRef<HTMLElement>(null); // Scroll container ref for container-based scrolling
   const [activeSection, setActiveSection] = useState<string>('All');
   const [contentWidth, setContentWidth] = useState(0);
   const [windowWidth, setWindowWidth] = useState(1920); // Default width, will be updated on mount
@@ -70,9 +70,11 @@ export default function HomeClient({ items, categories = ['All', 'Work', 'Lab', 
     };
   }, [items.length]);
 
-  // Use scroll progress instead of absolute scrollY values
-  // Track window scroll progress (0 to 1) through the document
-  const { scrollYProgress } = useScroll();
+  // Use scroll progress with container-based scrolling
+  // Track scroll progress (0 to 1) through the scroll container
+  const { scrollYProgress } = useScroll({
+    container: scrollContainerRef,
+  });
 
   // Stage 1: Scale transform - Map scrollYProgress [0, 0.1] -> scale [baseScale * 1.15, baseScale]
   const scale = useTransform(scrollYProgress, [0, 0.1], [baseScale * 1.15, baseScale]);
@@ -375,7 +377,9 @@ export default function HomeClient({ items, categories = ['All', 'Work', 'Lab', 
   const scrollToCategory = (category: string) => {
     try {
       if (category === 'All') {
-        window.scrollTo({ top: 0, behavior: 'smooth' });
+        if (scrollContainerRef.current) {
+          scrollContainerRef.current.scrollTo({ top: 0, behavior: 'smooth' });
+        }
         return;
       }
 
@@ -425,12 +429,17 @@ export default function HomeClient({ items, categories = ['All', 'Work', 'Lab', 
         return;
       }
       
-      // Calculate target scroll position as percentage of document height
-      const documentHeight = document.body.scrollHeight;
-      const targetScrollY = documentHeight * targetProgress;
+      // Calculate target scroll position as percentage of container height
+      if (!scrollContainerRef.current) {
+        console.warn('Scroll container ref not available');
+        return;
+      }
       
-      if (!isNaN(targetScrollY) && documentHeight > 0) {
-        window.scrollTo({ top: targetScrollY, behavior: 'smooth' });
+      const containerHeight = scrollContainerRef.current.scrollHeight;
+      const targetScrollY = containerHeight * targetProgress;
+      
+      if (!isNaN(targetScrollY) && containerHeight > 0) {
+        scrollContainerRef.current.scrollTo({ top: targetScrollY, behavior: 'smooth' });
       }
     } catch (error) {
       console.error('Error in scrollToCategory:', error);
@@ -440,25 +449,28 @@ export default function HomeClient({ items, categories = ['All', 'Work', 'Lab', 
   // Early return if no items
   if (!sortedItems || sortedItems.length === 0) {
     return (
-      <div className="bg-stone-100 dark:bg-neutral-700 min-h-screen flex items-center justify-center">
+      <main className="h-[100dvh] w-full overflow-y-auto overflow-x-hidden bg-stone-100 dark:bg-neutral-700 flex items-center justify-center">
         <div className="text-center">
           <h1 className="text-2xl font-bold mb-4">No content available</h1>
           <p className="text-neutral-600 dark:text-neutral-400">Please check your Notion database configuration.</p>
         </div>
-      </div>
+      </main>
     );
   }
 
   return (
-    <div className="bg-stone-100 dark:bg-neutral-700 no-scrollbar">
+    <main 
+      ref={scrollContainerRef}
+      className="h-[100dvh] w-full overflow-y-auto overflow-x-hidden bg-stone-100 dark:bg-neutral-700 no-scrollbar"
+    >
       <Navigation 
         activeSection={activeSection} 
         categories={categories}
         onNavClick={scrollToCategory}
       />
       
-      {/* Scrollable Container - Large height for vertical scrolling */}
-      <div ref={containerRef} className="h-[400vh] no-scrollbar">
+      {/* Scrollable Content Container - Large height for vertical scrolling */}
+      <div className="h-[400vh] no-scrollbar">
         {/* Fixed Viewport Container */}
         <div className="sticky top-0 h-screen flex items-center justify-center overflow-hidden">
           <motion.div
@@ -509,6 +521,6 @@ export default function HomeClient({ items, categories = ['All', 'Work', 'Lab', 
           </motion.div>
         </div>
       </div>
-    </div>
+    </main>
   );
 }
