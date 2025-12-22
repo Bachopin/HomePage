@@ -1,5 +1,6 @@
 import { getDatabaseItems, NotionItem } from '@/lib/notion';
 import HomeClient from '@/components/HomeClient';
+import ErrorBoundary from '@/components/ErrorBoundary';
 
 // Incremental Static Regeneration (ISR) - revalidate every hour
 // This provides periodic synchronization with Notion while serving cached pages
@@ -75,7 +76,16 @@ export default async function Home() {
     sortedItems.push(...sortedProjectItems);
     if (outroItem) sortedItems.push(outroItem);
     
-    items = sortedItems;
+    // Filter out invalid items (isValid: false)
+    items = sortedItems.filter(item => item.isValid === true);
+    
+    // Log validation errors for debugging
+    const invalidItems = sortedItems.filter(item => item.isValid === false);
+    if (invalidItems.length > 0) {
+      console.warn(`Filtered out ${invalidItems.length} invalid item(s):`, 
+        invalidItems.map(item => ({ id: item.id, title: item.title, error: item.validationError }))
+      );
+    }
     
     // Navigation categories - must match the order of cards
     categories = ['All', ...finalCategoryOrder];
@@ -85,5 +95,28 @@ export default async function Home() {
     items = [];
   }
 
-  return <HomeClient items={items} categories={categories} />;
+  // Empty State: Show friendly message if no valid items
+  if (items.length === 0) {
+    return (
+      <div className="bg-stone-100 dark:bg-neutral-700 min-h-screen flex items-center justify-center p-8">
+        <div className="text-center max-w-md">
+          <h1 className="text-2xl font-bold mb-4 text-neutral-900 dark:text-neutral-100">
+            暂无内容
+          </h1>
+          <p className="text-neutral-600 dark:text-neutral-400 mb-2">
+            当前没有可显示的内容。
+          </p>
+          <p className="text-sm text-neutral-500 dark:text-neutral-500">
+            请检查 Notion 数据库配置，确保有标记为 "Live" 状态的项目。
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <ErrorBoundary>
+      <HomeClient items={items} categories={categories} />
+    </ErrorBoundary>
+  );
 }

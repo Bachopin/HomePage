@@ -22,6 +22,8 @@ export interface NotionItem {
   size: '1x1' | '1x2' | '2x1' | '2x2';
   category?: string;
   sort?: number;
+  isValid: boolean;
+  validationError?: string;
 }
 
 export async function getDatabaseItems(): Promise<NotionItem[]> {
@@ -128,9 +130,23 @@ export async function getDatabaseItems(): Promise<NotionItem[]> {
           return []; // Return empty array if we can't parse
         }
         
-        const mappedItems = fallbackData.results.map((page: any) => {
-          return mapPageToItem(page);
-        });
+        const mappedItems = await Promise.all(
+          fallbackData.results.map(async (page: any) => {
+            const item = mapPageToItem(page);
+            // Update Debug field in Notion
+            if (!item.isValid && item.validationError) {
+              await updateNotionDebugField(page.id, item.validationError).catch(() => {
+                // Silently handle errors
+              });
+            } else {
+              // Clear Debug field if item is valid
+              await updateNotionDebugField(page.id, null).catch(() => {
+                // Silently handle errors
+              });
+            }
+            return item;
+          })
+        );
         return mappedItems;
       }
       
@@ -147,9 +163,23 @@ export async function getDatabaseItems(): Promise<NotionItem[]> {
       return []; // Return empty array if we can't parse the response
     }
 
-    const mappedItems = data.results.map((page: any) => {
-      return mapPageToItem(page);
-    });
+    const mappedItems = await Promise.all(
+      data.results.map(async (page: any) => {
+        const item = mapPageToItem(page);
+        // Update Debug field in Notion
+        if (!item.isValid && item.validationError) {
+          await updateNotionDebugField(page.id, item.validationError).catch(() => {
+            // Silently handle errors
+          });
+        } else {
+          // Clear Debug field if item is valid
+          await updateNotionDebugField(page.id, null).catch(() => {
+            // Silently handle errors
+          });
+        }
+        return item;
+      })
+    );
 
     return mappedItems;
   } catch (error: any) {
@@ -163,71 +193,197 @@ export async function getDatabaseItems(): Promise<NotionItem[]> {
   }
 }
 
-// Helper function to map Notion page to our item format
+// Helper function to update Notion Debug field
+async function updateNotionDebugField(pageId: string, errorMessage: string | null): Promise<void> {
+  if (!notion) {
+    console.warn('Notion client not initialized, cannot update Debug field');
+    return;
+  }
+
+  try {
+    await notion.pages.update({
+      page_id: pageId,
+      properties: {
+        Debug: {
+          rich_text: errorMessage 
+            ? [{ text: { content: errorMessage } }]
+            : []
+        }
+      }
+    });
+  } catch (error: any) {
+    // Silently fail - Debug field update is not critical
+    console.warn(`Failed to update Debug field for page ${pageId}:`, error?.message || error);
+  }
+}
+
+// Helper function to map Notion page to our item format with validation
 function mapPageToItem(page: any): NotionItem {
-  const props = page.properties;
+  const validationErrors: string[] = [];
+  let isValid = true;
 
-      // Extract title (Name property)
-      const title = props.Name?.title?.[0]?.plain_text || 'Untitled';
+  try {
+    const props = page.properties;
 
-      // Extract year (Year property - can be text like "Trade | Research")
-      const year = props.Year?.rich_text?.[0]?.plain_text || 
-                  props.Year?.title?.[0]?.plain_text || 
-                  '';
+    // Extract title (Name property) - REQUIRED, cannot be empty or 'Untitled'
+    let title = '';
+    try {
+      title = props.Name?.title?.[0]?.plain_text || '';
+    } catch (error) {
+      validationErrors.push('Title extraction failed');
+      isValid = false;
+    }
 
-      // Extract description (Summary property) - support multi-line text
-      // Join all rich_text blocks to preserve line breaks
-      let description = '';
+    if (!title || title.trim() === '' || title === 'Untitled') {
+      validationErrors.push('Title is empty or "Untitled"');
+      isValid = false;
+    }
+
+    // Extract year (Year property - can be text like "Trade | Research")
+    let year = '';
+    try {
+      year = props.Year?.rich_text?.[0]?.plain_text || 
+             props.Year?.title?.[0]?.plain_text || 
+             '';
+    } catch (error) {
+      // Year is optional, so we don't fail validation
+      year = '';
+    }
+
+    // Extract description (Summary property) - support multi-line text
+    // Join all rich_text blocks to preserve line breaks
+    let description = '';
+    try {
       if (props.Summary?.rich_text && props.Summary.rich_text.length > 0) {
         description = props.Summary.rich_text.map((text: any) => text.plain_text).join('');
       } else if (props.Summary?.title && props.Summary.title.length > 0) {
         description = props.Summary.title.map((text: any) => text.plain_text).join('');
       }
+    } catch (error) {
+      // Description is optional, so we don't fail validation
+      description = '';
+    }
 
-      // Extract type (Type select)
-      const typeRaw = props.Type?.select?.name?.toLowerCase() || 'project';
-      const type = typeRaw === 'intro' ? 'intro' : 
-                   typeRaw === 'outro' ? 'outro' : 
-                   'project';
+    // Extract type (Type select)
+    let typeRaw = '';
+    let type: 'intro' | 'project' | 'outro' = 'project';
+    try {
+      typeRaw = props.Type?.select?.name?.toLowerCase() || 'project';
+      type = typeRaw === 'intro' ? 'intro' : 
+             typeRaw === 'outro' ? 'outro' : 
+             'project';
+    } catch (error) {
+      validationErrors.push('Type extraction failed');
+      isValid = false;
+    }
 
-      // Extract image (Cover files)
-      let image = '';
-      if (props.Cover?.files && props.Cover.files.length > 0) {
+    // Extract image (Cover files) - REQUIRED: must be able to safely get URL
+    let image = '';
+    try {
+      if (props.Cover?.files && Array.isArray(props.Cover.files) && props.Cover.files.length > 0) {
         const file = props.Cover.files[0];
         image = file.file?.url || file.external?.url || '';
+        
+        if (!image || image.trim() === '') {
+          validationErrors.push('Image URL is empty or invalid');
+          isValid = false;
+        }
+      } else {
+        validationErrors.push('Cover files array is missing or empty');
+        isValid = false;
       }
+    } catch (error) {
+      validationErrors.push('Image extraction failed');
+      isValid = false;
+    }
 
-      // Extract link (Link URL)
-      const link = props.Link?.url || '#';
+    // Extract link (Link URL)
+    let link = '#';
+    try {
+      link = props.Link?.url || '#';
+    } catch (error) {
+      // Link is optional, default to '#'
+      link = '#';
+    }
 
-      // Extract size (Grid Size select)
-      const sizeRaw = props['Grid Size']?.select?.name?.toLowerCase() || '1x1';
-      const size = (['1x1', '1x2', '2x1', '2x2'].includes(sizeRaw) 
-        ? sizeRaw 
-        : '1x1') as '1x1' | '1x2' | '2x1' | '2x2';
+    // Extract size (Grid Size select) - REQUIRED: must match union type
+    let sizeRaw = '';
+    let size: '1x1' | '1x2' | '2x1' | '2x2' = '1x1';
+    try {
+      sizeRaw = props['Grid Size']?.select?.name?.toLowerCase() || '1x1';
+      if (['1x1', '1x2', '2x1', '2x2'].includes(sizeRaw)) {
+        size = sizeRaw as '1x1' | '1x2' | '2x1' | '2x2';
+      } else {
+        validationErrors.push(`Invalid size: ${sizeRaw}`);
+        isValid = false;
+      }
+    } catch (error) {
+      validationErrors.push('Size extraction failed');
+      isValid = false;
+    }
 
-      // Extract category (Category select)
-      const category = props.Category?.select?.name || '';
+    // Extract category (Category select) - REQUIRED for project type
+    let category = '';
+    try {
+      category = props.Category?.select?.name || '';
+      
+      if (type === 'project' && (!category || category.trim() === '')) {
+        validationErrors.push('Category is required for project type');
+        isValid = false;
+      }
+    } catch (error) {
+      if (type === 'project') {
+        validationErrors.push('Category extraction failed');
+        isValid = false;
+      }
+    }
 
-      // Extract sort (Sort number field)
-      let sort: number | undefined = undefined;
+    // Extract sort (Sort number field)
+    let sort: number | undefined = undefined;
+    try {
       if (props.Sort) {
         if (props.Sort.type === 'number' && props.Sort.number !== null && props.Sort.number !== undefined) {
           sort = props.Sort.number;
         }
       }
+    } catch (error) {
+      // Sort is optional, so we don't fail validation
+      sort = undefined;
+    }
 
-  return {
-    id: page.id,
-    title,
-    year,
-    description,
-    type,
-    image,
-    link,
-    size,
-    category,
-    sort,
-  };
+    const validationError = validationErrors.length > 0 ? validationErrors.join('; ') : undefined;
+
+    return {
+      id: page.id,
+      title: title || 'Untitled', // Fallback for invalid items
+      year,
+      description,
+      type,
+      image,
+      link,
+      size,
+      category,
+      sort,
+      isValid,
+      validationError,
+    };
+  } catch (error: any) {
+    // Catch any unexpected errors during mapping
+    const errorMessage = `Mapping failed: ${error?.message || 'Unknown error'}`;
+    return {
+      id: page.id,
+      title: 'Untitled',
+      year: '',
+      description: '',
+      type: 'project',
+      image: '',
+      link: '#',
+      size: '1x1',
+      category: '',
+      sort: undefined,
+      isValid: false,
+      validationError: errorMessage,
+    };
+  }
 }
 
