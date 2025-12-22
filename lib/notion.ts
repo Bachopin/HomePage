@@ -166,7 +166,7 @@ function mapPageToItem(page: any): NotionItem {
 
       // Extract sort (Sort number field)
       let sort: number | undefined = undefined;
-      if (props.Sort?.type === 'number' && props.Sort.number !== null) {
+      if (props.Sort?.number !== null && props.Sort?.number !== undefined) {
         sort = props.Sort.number;
       }
 

@@ -87,7 +87,7 @@ export default function HomeClient({ items, categories = ['All', 'Work', 'Lab', 
     return { categoryOffsets: offsets, cardPositions: positions, cardLeftEdges: leftEdges, cardWidths: widths };
   }, [items, windowWidth]);
 
-  // Track active section based on card left edge passing through viewport center (crosshair position)
+  // Track active section based on card center passing through viewport center (crosshair position)
   // Since items are sorted, the first card in each category is the one with lowest sort value
   useMotionValueEvent(springX, 'change', (latest) => {
     // If at the start (springX >= 0), show 'All'
@@ -98,11 +98,11 @@ export default function HomeClient({ items, categories = ['All', 'Work', 'Lab', 
 
     const viewportCenter = windowWidth / 2; // Crosshair position (center of viewport)
     
-    // Calculate which category's first card (lowest sort) has its left edge passed viewport center
+    // Calculate which category's first card (lowest sort) has its center closest to viewport center
     // latest is negative (content moving left), so card position = cardAbsoluteX + latest
     let activeCategory = 'All';
-    let mostRecentCategory = 'All';
-    let mostRecentDistance = Infinity;
+    let closestCategory = 'All';
+    let minDistance = Infinity;
     
     // Get ordered categories (excluding 'All' - it's a virtual tab)
     const orderedCategories = categories.filter((c) => c !== 'All');
@@ -132,33 +132,29 @@ export default function HomeClient({ items, categories = ['All', 'Work', 'Lab', 
 
       if (targetCardIndex === -1) return;
 
-      const cardLeftEdge = cardLeftEdges[targetCardIndex];
-      if (cardLeftEdge === undefined) return;
+      const cardCenterX = cardPositions[targetCardIndex];
+      if (cardCenterX === undefined) return;
 
-      // Calculate current card left edge position (accounting for scroll transform)
-      const cardCurrentLeftX = cardLeftEdge + latest; // latest is negative
+      // Calculate current card center position (accounting for scroll transform)
+      const cardCurrentCenterX = cardCenterX + latest; // latest is negative
       
-      // Check if card left edge has passed viewport center (crosshair)
-      // When left edge passes center, switch to this category
-      if (cardCurrentLeftX < viewportCenter) {
-        // Card left edge has passed center
-        // Calculate distance from left edge to center (positive = passed, smaller = more recently passed)
-        const distance = viewportCenter - cardCurrentLeftX;
-        
-        // Track the most recently passed category (smallest distance)
-        if (distance < mostRecentDistance) {
-          mostRecentDistance = distance;
-          mostRecentCategory = category;
-        }
+      // Calculate distance from card center to viewport center
+      // Use absolute distance to find the closest card to center
+      const distance = Math.abs(cardCurrentCenterX - viewportCenter);
+      
+      // Track the category whose card center is closest to viewport center
+      if (distance < minDistance) {
+        minDistance = distance;
+        closestCategory = category;
       }
     });
 
-    // Use the most recently passed category, or 'All' if none has passed
-    if (mostRecentCategory !== 'All') {
-      activeCategory = mostRecentCategory;
+    // Use the closest category, or 'All' if none found
+    if (closestCategory !== 'All') {
+      activeCategory = closestCategory;
     } else if (orderedCategories.length > 0) {
-      // If no category has passed yet, check if we're at the very end
-    // In that case, select the last category
+      // If no category found yet, check if we're at the very end
+      // In that case, select the last category
       const lastCategory = orderedCategories[orderedCategories.length - 1];
       let targetCardIndex = -1;
 
@@ -177,11 +173,11 @@ export default function HomeClient({ items, categories = ['All', 'Work', 'Lab', 
       });
       
       if (targetCardIndex !== -1) {
-        const cardLeftEdge = cardLeftEdges[targetCardIndex];
-        if (cardLeftEdge !== undefined) {
-          const cardCurrentLeftX = cardLeftEdge + latest;
-          // If the last category's card left edge has passed center, select it
-          if (cardCurrentLeftX < viewportCenter) {
+        const cardCenterX = cardPositions[targetCardIndex];
+        if (cardCenterX !== undefined) {
+          const cardCurrentCenterX = cardCenterX + latest;
+          // If the last category's card center has passed center, select it
+          if (cardCurrentCenterX < viewportCenter) {
             activeCategory = lastCategory;
           }
         }
@@ -191,7 +187,7 @@ export default function HomeClient({ items, categories = ['All', 'Work', 'Lab', 
     setActiveSection(activeCategory);
   });
 
-  // Scroll to category function - align card left edge to viewport center (crosshair position)
+  // Scroll to category function - align card center to viewport center (crosshair position)
   // Jump to the first card of the category (which is the one with lowest sort value, since items are sorted)
   const scrollToCategory = (category: string) => {
     if (category === 'All') {
@@ -199,9 +195,9 @@ export default function HomeClient({ items, categories = ['All', 'Work', 'Lab', 
       return;
     }
 
-    // Find the first card belonging to this category
+    // Find the first card belonging to this category (anchor card with lowest sort value)
     // Since items are already sorted by sort value, the first matching card is the target
-    let targetCardIndex = -1;
+    let firstCardIndex = -1;
 
     items.forEach((item, index) => {
       if (item.type === 'intro' || item.type === 'outro') return;
@@ -211,13 +207,13 @@ export default function HomeClient({ items, categories = ['All', 'Work', 'Lab', 
       const targetCategory = category.trim();
       if (itemCategory !== targetCategory) return;
       
-      // Since items are already sorted, the first matching card is the one with lowest sort
-      if (targetCardIndex === -1) {
-        targetCardIndex = index;
+      // Since items are already sorted, the first matching card is the one with lowest sort (anchor card)
+      if (firstCardIndex === -1) {
+        firstCardIndex = index;
       }
     });
 
-    if (targetCardIndex === -1) {
+    if (firstCardIndex === -1) {
       // Debug: Log all available categories and items
       const availableCategories = [...new Set(items.filter(i => i.type === 'project' && i.category).map(i => i.category))];
       console.warn(`No card found for category: "${category}"`);
@@ -232,20 +228,20 @@ export default function HomeClient({ items, categories = ['All', 'Work', 'Lab', 
       return;
     }
 
-    const targetCardLeftEdge = cardLeftEdges[targetCardIndex];
-    if (targetCardLeftEdge === undefined) {
-      console.warn(`Card left edge undefined for index: ${targetCardIndex}, card:`, items[targetCardIndex]);
+    const firstCardCenterX = cardPositions[firstCardIndex];
+    if (firstCardCenterX === undefined) {
+      console.warn(`Card center position undefined for index: ${firstCardIndex}, card:`, items[firstCardIndex]);
       return;
     }
 
-    // Calculate the target translateX value to align card left edge to viewport center (crosshair)
-    // cardLeftEdges[index] is the absolute position of card left edge (relative to page left)
-    // When springX = 0, card left edge is at cardLeftEdges[index]
-    // When springX = -100, card moves left by 100px, so card left edge is at cardLeftEdges[index] - 100
-    // We want: cardLeftEdges[index] + springX = viewportCenter
-    // So: springX = viewportCenter - cardLeftEdges[index]
+    // Calculate the target translateX value to align card center to viewport center (crosshair)
+    // cardPositions[index] is the absolute position of card center (relative to page left)
+    // When springX = 0, card center is at cardPositions[index]
+    // When springX = -100, card moves left by 100px, so card center is at cardPositions[index] - 100
+    // We want: cardPositions[index] + springX = viewportCenter
+    // So: springX = viewportCenter - cardPositions[index]
     const viewportCenter = windowWidth / 2; // Crosshair position
-    const targetTranslateX = viewportCenter - targetCardLeftEdge;
+    const targetTranslateX = viewportCenter - firstCardCenterX;
 
     // Inverse map: find scrollY that produces this translateX
     // x maps scrollY [300, 4000] -> x [0, maxScroll]
