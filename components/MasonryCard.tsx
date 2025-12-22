@@ -95,8 +95,9 @@ export default function MasonryCard({
       // Available overflow on each side
       const totalOverflow = renderedImgWidth - cardW;
       maxOffset = totalOverflow / 2;
-      // Initial position: center the image (no offset)
-      initialOffset = 0;
+      // Initial position: show rightmost part of image (negative offset)
+      // As card moves, image moves left (positive) to reveal left side
+      initialOffset = -maxOffset;
     } else if (imgRatio < cardRatio) {
       // Image fills width, calculate rendered height with scale
       const renderedImgHeight = (cardW / imgRatio) * IMAGE_SCALE;
@@ -164,10 +165,11 @@ export default function MasonryCard({
     const parallaxRange = config.cardW;
     const progress = Math.min(distancePastCenter / parallaxRange, 1);
     
-    // Image moves right (positive) as card moves left past center
-    // Range: [initialOffset (0), initialOffset + maxOffset]
-    const movement = initialOffset + progress * maxOffset;
-    return Math.min(Math.max(movement, initialOffset), initialOffset + maxOffset);
+    // Image moves left (positive) as card moves left past center
+    // Range: [initialOffset (-maxOffset), initialOffset + 2*maxOffset (maxOffset)]
+    // Start from rightmost part, move to show leftmost part
+    const movement = initialOffset + progress * (2 * maxOffset);
+    return Math.min(Math.max(movement, initialOffset), initialOffset + 2 * maxOffset);
   });
 
   // Y Parallax: for tall images (vertical movement)
