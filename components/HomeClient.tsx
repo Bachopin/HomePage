@@ -55,33 +55,108 @@ export default function HomeClient({ items, categories = ['All', 'Work', 'Lab', 
   });
   const springX = useSpring(x, { stiffness: 400, damping: 40 });
 
-  // Precompute horizontal offsets for each category and card positions
+  // Grid simulator: Calculate card positions in a 2-row grid layout
   const { categoryOffsets, cardPositions, cardLeftEdges, cardWidths } = useMemo(() => {
     const offsets: Record<string, number> = {};
     const positions: number[] = [];
     const leftEdges: number[] = [];
     const widths: number[] = [];
     const gap = 24; // 1.5rem
+    const columnWidth = 300; // Base column width
     const introPadding = windowWidth ? windowWidth / 2 - 312 : 0;
 
-    let currentX = introPadding;
+    // Grid occupancy map: 2 rows, dynamically expanding columns
+    // occupied[row][column] = true if that cell is occupied
+    const occupied: boolean[][] = [[], []]; // [row0, row1]
+    let maxColumn = -1;
 
-    items.forEach((item, index) => {
-      // Intro/Outro also occupy width
-      const width = item.size === '2x1' || item.size === '2x2' ? 624 : 300;
+    // Helper function to get card dimensions in grid units
+    const getCardDimensions = (size: string): { rows: number; cols: number; width: number } => {
+      switch (size) {
+        case '1x1': return { rows: 1, cols: 1, width: columnWidth };
+        case '1x2': return { rows: 2, cols: 1, width: columnWidth };
+        case '2x1': return { rows: 1, cols: 2, width: columnWidth * 2 + gap };
+        case '2x2': return { rows: 2, cols: 2, width: columnWidth * 2 + gap };
+        default: return { rows: 1, cols: 1, width: columnWidth };
+      }
+    };
+
+    // Helper function to check if a position can fit a card
+    const canFit = (startRow: number, startCol: number, rows: number, cols: number): boolean => {
+      // Check if out of bounds
+      if (startRow + rows > 2) return false;
       
-      // Store card left edge, center position, and width
-      leftEdges[index] = currentX;
-      positions[index] = currentX + width / 2;
-      widths[index] = width;
-
-      if (item.type !== 'intro' && item.type !== 'outro' && item.category) {
-        if (offsets[item.category] === undefined) {
-          offsets[item.category] = currentX;
+      // Check all cells that would be occupied
+      for (let r = startRow; r < startRow + rows; r++) {
+        for (let c = startCol; c < startCol + cols; c++) {
+          if (occupied[r][c] === true) {
+            return false;
+          }
         }
       }
+      return true;
+    };
 
-      currentX += width + gap;
+    // Helper function to mark cells as occupied
+    const markOccupied = (startRow: number, startCol: number, rows: number, cols: number): void => {
+      for (let r = startRow; r < startRow + rows; r++) {
+        for (let c = startCol; c < startCol + cols; c++) {
+          occupied[r][c] = true;
+        }
+      }
+      maxColumn = Math.max(maxColumn, startCol + cols - 1);
+    };
+
+    // Place each card in the grid
+    items.forEach((item, index) => {
+      const { rows, cols, width } = getCardDimensions(item.size);
+      
+      // Find the first available position (top-left, left-to-right, top-to-bottom)
+      let placed = false;
+      let startRow = 0;
+      let startCol = 0;
+
+      // Search for available position (left-to-right, top-to-bottom)
+      // Start from column 0 and go right, checking each row from top to bottom
+      for (let col = 0; col <= maxColumn + 10; col++) { // Add buffer for safety
+        for (let row = 0; row <= 2 - rows; row++) {
+          if (canFit(row, col, rows, cols)) {
+            startRow = row;
+            startCol = col;
+            placed = true;
+            break;
+          }
+        }
+        if (placed) break;
+      }
+
+      if (!placed) {
+        // Fallback: place at the next available column, starting from row 0
+        startCol = maxColumn + 1;
+        startRow = 0;
+        // Mark as placed for fallback
+        placed = true;
+      }
+
+      // Mark cells as occupied
+      markOccupied(startRow, startCol, rows, cols);
+
+      // Calculate actual pixel positions
+      // leftEdge = introPadding + startCol * (columnWidth + gap)
+      const leftEdge = introPadding + startCol * (columnWidth + gap);
+      const centerX = leftEdge + width / 2;
+
+      // Store positions
+      leftEdges[index] = leftEdge;
+      positions[index] = centerX;
+      widths[index] = width;
+
+      // Track category offsets (first card of each category)
+      if (item.type !== 'intro' && item.type !== 'outro' && item.category) {
+        if (offsets[item.category] === undefined) {
+          offsets[item.category] = leftEdge;
+        }
+      }
     });
 
     return { categoryOffsets: offsets, cardPositions: positions, cardLeftEdges: leftEdges, cardWidths: widths };
