@@ -88,7 +88,7 @@ export default function HomeClient({ items, categories = ['All', 'Work', 'Lab', 
   }, [items, windowWidth]);
 
   // Track active section based on card left edge passing through viewport center (crosshair position)
-  // Find the card with smallest non-null sortOrder in each category
+  // Since items are sorted, the first card in each category is the one with lowest sort value
   useMotionValueEvent(springX, 'change', (latest) => {
     // If at the start (springX >= 0), show 'All'
     if (latest >= 0) {
@@ -98,7 +98,7 @@ export default function HomeClient({ items, categories = ['All', 'Work', 'Lab', 
 
     const viewportCenter = windowWidth / 2; // Crosshair position (center of viewport)
     
-    // Calculate which category's target card (with smallest sortOrder) has its left edge passed viewport center
+    // Calculate which category's first card (lowest sort) has its left edge passed viewport center
     // latest is negative (content moving left), so card position = cardAbsoluteX + latest
     let activeCategory = 'All';
     let mostRecentCategory = 'All';
@@ -111,12 +111,11 @@ export default function HomeClient({ items, categories = ['All', 'Work', 'Lab', 
       return;
     }
 
-    // For each category, find the card with smallest non-null sortOrder
+    // For each category, find the first card (which is already sorted - lowest sort comes first)
     orderedCategories.forEach((category) => {
       let targetCardIndex = -1;
-      let minSortValue = Infinity;
-      let foundSortCard = false;
 
+      // Find the first card in this category (already sorted by sort value)
       items.forEach((item, index) => {
         if (item.type === 'intro' || item.type === 'outro') return;
         if (!item.category) return;
@@ -125,15 +124,8 @@ export default function HomeClient({ items, categories = ['All', 'Work', 'Lab', 
         const targetCategory = category.trim();
         if (itemCategory !== targetCategory) return;
 
-        // Prioritize cards with a valid sortOrder (not null/undefined)
-        if (item.sortOrder !== undefined && item.sortOrder !== null) {
-          if (!foundSortCard || item.sortOrder < minSortValue) {
-            minSortValue = item.sortOrder;
-            targetCardIndex = index;
-            foundSortCard = true;
-          }
-        } else if (!foundSortCard && targetCardIndex === -1) {
-          // Fallback: if no sortOrder card found, use the first card in array order
+        // Since items are already sorted, the first matching card is the one with lowest sort
+        if (targetCardIndex === -1) {
           targetCardIndex = index;
         }
       });
@@ -166,12 +158,11 @@ export default function HomeClient({ items, categories = ['All', 'Work', 'Lab', 
       activeCategory = mostRecentCategory;
     } else if (orderedCategories.length > 0) {
       // If no category has passed yet, check if we're at the very end
-      // In that case, select the last category
+    // In that case, select the last category
       const lastCategory = orderedCategories[orderedCategories.length - 1];
       let targetCardIndex = -1;
-      let minSortValue = Infinity;
-      let foundSortCard = false;
 
+      // Find the first card in the last category (already sorted)
       items.forEach((item, index) => {
         if (item.type === 'intro' || item.type === 'outro') return;
         if (!item.category) return;
@@ -179,17 +170,12 @@ export default function HomeClient({ items, categories = ['All', 'Work', 'Lab', 
         const itemCategory = item.category.trim();
         if (itemCategory !== lastCategory.trim()) return;
 
-        if (item.sortOrder !== undefined && item.sortOrder !== null) {
-          if (!foundSortCard || item.sortOrder < minSortValue) {
-            minSortValue = item.sortOrder;
-            targetCardIndex = index;
-            foundSortCard = true;
-          }
-        } else if (!foundSortCard && targetCardIndex === -1) {
+        // Since items are already sorted, the first matching card is the one with lowest sort
+        if (targetCardIndex === -1) {
           targetCardIndex = index;
         }
       });
-
+      
       if (targetCardIndex !== -1) {
         const cardLeftEdge = cardLeftEdges[targetCardIndex];
         if (cardLeftEdge !== undefined) {
@@ -206,17 +192,16 @@ export default function HomeClient({ items, categories = ['All', 'Work', 'Lab', 
   });
 
   // Scroll to category function - align card left edge to viewport center (crosshair position)
-  // Jump to the card with smallest non-null sortOrder in the category
+  // Jump to the first card of the category (which is the one with lowest sort value, since items are sorted)
   const scrollToCategory = (category: string) => {
     if (category === 'All') {
       window.scrollTo({ top: 0, behavior: 'smooth' });
       return;
     }
 
-    // Find the card with smallest non-null sortOrder belonging to this category
+    // Find the first card belonging to this category
+    // Since items are already sorted by sort value, the first matching card is the target
     let targetCardIndex = -1;
-    let minSortValue = Infinity;
-    let foundSortCard = false;
 
     items.forEach((item, index) => {
       if (item.type === 'intro' || item.type === 'outro') return;
@@ -225,16 +210,9 @@ export default function HomeClient({ items, categories = ['All', 'Work', 'Lab', 
       const itemCategory = item.category.trim();
       const targetCategory = category.trim();
       if (itemCategory !== targetCategory) return;
-
-      // Prioritize cards with a valid sortOrder (not null/undefined)
-      if (item.sortOrder !== undefined && item.sortOrder !== null) {
-        if (!foundSortCard || item.sortOrder < minSortValue) {
-          minSortValue = item.sortOrder;
-          targetCardIndex = index;
-          foundSortCard = true;
-        }
-      } else if (!foundSortCard && targetCardIndex === -1) {
-        // Fallback: if no sortOrder card found, use the first card in array order
+      
+      // Since items are already sorted, the first matching card is the one with lowest sort
+      if (targetCardIndex === -1) {
         targetCardIndex = index;
       }
     });
@@ -249,7 +227,7 @@ export default function HomeClient({ items, categories = ['All', 'Work', 'Lab', 
         title: item.title,
         category: item.category,
         categoryTrimmed: item.category?.trim(),
-        sortOrder: item.sortOrder
+        sort: item.sort
       })));
       return;
     }
