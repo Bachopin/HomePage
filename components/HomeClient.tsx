@@ -133,10 +133,9 @@ export default function HomeClient({ items, categories = ['All', 'Work', 'Lab', 
     
     // Responsive column width:
     // - Desktop: fixed 300px
-    // - Mobile: calculate so that two columns plus gap fit within screen width minus padding
-    const mobilePadding = 32; // 16px each side
+    // - Mobile: two columns + gap exactly fill the viewport width
     const columnWidth = isMobile
-      ? (windowWidth - mobilePadding - gap) / 2
+      ? (windowWidth - gap) / 2
       : 300;
     // Maintain square grid unit for all viewports
     const rowHeight = columnWidth;
@@ -169,7 +168,7 @@ export default function HomeClient({ items, categories = ['All', 'Work', 'Lab', 
     const lastDims = lastItem ? getCardDimensions(lastItem.size || '1x1') : { width: columnWidth };
 
     // Asymmetric padding for perfect centering of first/last cards
-    const paddingLeft = Math.max(24, (windowWidth - (firstDims as any).width) / 2);
+    const paddingLeft = Math.max(0, (windowWidth - (firstDims as any).width) / 2);
     const paddingRight = Math.max(24, (windowWidth - (lastDims as any).width) / 2);
 
     // Grid occupancy map: 2 rows for both desktop and mobile
@@ -211,11 +210,10 @@ export default function HomeClient({ items, categories = ['All', 'Work', 'Lab', 
         return;
       }
       
-      // For mobile, force cols = 1
       const dims = getCardDimensions(item.size);
       const rows = dims.rows;
-      const cols = isMobile ? 1 : dims.cols;
-      const width = isMobile ? columnWidth : dims.width;
+      const cols = dims.cols;
+      const width = dims.width;
       const height = dims.height;
       
       // Find the first available position
@@ -283,6 +281,16 @@ export default function HomeClient({ items, categories = ['All', 'Work', 'Lab', 
       containerWidth: finalWidth
     };
   }, [sortedItems, windowWidth]);
+
+  // Grid height for two rows plus gap (used to size the motion container)
+  const gridHeight = useMemo(() => {
+    // Reuse the same columnWidth logic to keep height consistent
+    const gap = 24;
+    const isMobile = windowWidth < 640;
+    const columnWidth = isMobile ? (windowWidth - gap) / 2 : 300;
+    const rowHeight = columnWidth;
+    return rowHeight * 2 + gap;
+  }, [windowWidth]);
 
   // Stage 2: X transform - Map scrollYProgress [0.05, 1.0] -> x [0, maxScroll]
   // maxScroll calculated based on containerWidth: ensures last card centers perfectly at scroll 100%
@@ -491,10 +499,11 @@ export default function HomeClient({ items, categories = ['All', 'Work', 'Lab', 
         {/* Fixed Viewport Container */}
         <div className="sticky top-0 h-screen flex items-center justify-center overflow-hidden">
           <motion.div
-            className="h-[640px] w-full relative"
+            className="w-full relative"
             style={{
               scale: springScale,
               x: springX,
+              height: gridHeight,
             }}
           >
             {/* Absolute Positioned Container */}
