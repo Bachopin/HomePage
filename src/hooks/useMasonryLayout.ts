@@ -298,9 +298,9 @@ export function useMasonryLayout({
           categoryStarts[category] = position.left;
         }
 
-        // 查找每个分类中 Sort 值最小的卡片作为目标卡片
+        // 查找每个分类中 Sort 值最小且不为空的卡片作为目标卡片
         const sort = item.sort;
-        if (sort !== undefined && sort !== null && !isNaN(sort)) {
+        if (sort !== undefined && sort !== null && !isNaN(sort) && sort > 0) {
           if (!categoryTargetCards[category] || sort < categoryTargetCards[category].sort) {
             categoryTargetCards[category] = {
               index,

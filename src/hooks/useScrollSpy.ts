@@ -2,7 +2,7 @@ import type { RefObject } from 'react';
 import { useState, useCallback } from 'react';
 import type { MotionValue } from 'framer-motion';
 import { useMotionValueEvent } from 'framer-motion';
-import { SCROLL } from '@/lib/config';
+import { SCROLL, getLayoutConfig } from '@/lib/config';
 
 /**
  * Hook 输入参数
@@ -96,10 +96,13 @@ export function useScrollSpy({
           continue;
         }
 
-        // 计算目标卡片的左边缘位置（中心位置减去一半宽度）
-        // 简化：直接使用目标卡片的中心位置作为判断依据
-        // 当卡片中心越过屏幕中心时，切换到该分类
-        if (absoluteXAtCenter >= targetX) {
+        // 计算目标卡片的左边缘位置
+        // 使用布局配置获取准确的卡片宽度
+        const layout = getLayoutConfig(windowWidth);
+        const cardHalfWidth = layout.columnWidth / 2; // 假设大多数卡片是1x1，使用单列宽度的一半
+        const cardLeftEdge = targetX - cardHalfWidth;
+        
+        if (absoluteXAtCenter >= cardLeftEdge) {
           activeCategory = category;
         }
       }

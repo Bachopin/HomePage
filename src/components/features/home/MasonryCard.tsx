@@ -353,8 +353,8 @@ export default function MasonryCard({
   const hasImage = image && image.trim() !== '';
   // 判断是否应该显示占位符（只有在有图片但未加载完成时才显示）
   const shouldShowPlaceholder = hasImage && (!imageLoaded || imageError || !imgSize);
-  // 判断是否有内容（标题或描述）
-  const hasContent = (title && title.trim() !== '') || (description && description.trim() !== '');
+  // 判断是否有内容（Name、Summary、Year 任意一个有文字）
+  const hasContent = (title && title.trim() !== '') || (description && description.trim() !== '') || (year && year.trim() !== '');
 
   // Grid area class (for non-absolute positioning)
   const gridAreaClass = `row-span-${cardDims.rows} col-span-${cardDims.cols}`;
