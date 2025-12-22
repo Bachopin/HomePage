@@ -2,8 +2,8 @@
 
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { motion, useScroll, useSpring, useTransform } from 'framer-motion';
-import Navigation from '@/components/Navigation';
-import MasonryCard from '@/components/MasonryCard';
+import Navigation from '@/components/layout/Navigation';
+import MasonryCard from '@/components/features/home/MasonryCard';
 import { NotionItem } from '@/lib/notion';
 import { useMasonryLayout } from '@/hooks/useMasonryLayout';
 import { useScrollSpy } from '@/hooks/useScrollSpy';

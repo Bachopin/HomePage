@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
-import CrosshairToggle from "@/components/CrosshairToggle";
+import CrosshairToggle from "@/components/ui/CrosshairToggle";
 
 export const metadata: Metadata = {
   title: "Personal Homepage",

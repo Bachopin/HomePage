@@ -1,7 +1,7 @@
 import { getDatabaseItems, getCategoryOrder } from '@/lib/notion';
 import { processHomePageItems } from '@/lib/transformers';
-import HomeClient from '@/components/HomeClient';
-import ErrorBoundary from '@/components/ErrorBoundary';
+import HomeClient from '@/components/features/home/HomeClient';
+import ErrorBoundary from '@/components/ui/ErrorBoundary';
 
 // Incremental Static Regeneration (ISR) - revalidate every hour
 export const revalidate = 36;
