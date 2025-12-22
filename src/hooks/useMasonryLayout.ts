@@ -1,13 +1,12 @@
 /**
  * 瀑布流布局计算 Hook
  * 
- * 职责：
- * 1. 计算每张卡片的绝对位置（top, left, width, height）
- * 2. 计算容器总宽度
- * 3. 记录每个分类的起始 X 坐标
- * 4. 计算网格高度
- * 
- * 所有布局常量从 lib/config.ts 引入，禁止硬编码
+ * 基于中心横线的布局逻辑：
+ * 1. 屏幕中心有一条隐形横线
+ * 2. Intro 卡片 (2x2) 居中于横线，其边长/2 = 基准距离
+ * 3. 1行高卡片：上边缘或下边缘距离横线 = 基准距离 + gap/2
+ * 4. 2行高卡片：横线穿过卡片中心
+ * 5. 排列顺序：Intro → Projects（按分类+Sort）→ Outro
  */
 
 import { useMemo } from 'react';
@@ -15,17 +14,13 @@ import type { NotionItem } from '@/lib/notion';
 import {
   getLayoutConfig,
   getCardPixelDimensions,
-  GRID,
 } from '@/lib/config';
-import type { CardSize, LayoutConfig, CardPixelDimensions } from '@/lib/config';
+import type { CardSize, LayoutConfig } from '@/lib/config';
 
 // ============================================================================
 // Types
 // ============================================================================
 
-/**
- * 卡片位置信息
- */
 export interface CardPosition {
   top: number;
   left: number;
@@ -34,23 +29,13 @@ export interface CardPosition {
   centerX: number;
 }
 
-/**
- * 布局计算结果
- */
 export interface MasonryLayoutResult {
-  /** 每张卡片的绝对位置 */
   cardPositions: CardPosition[];
-  /** 容器总宽度 */
   containerWidth: number;
-  /** 每个分类的目标卡片信息（left: 左边缘, centerX: 中心） */
   categoryTargetInfo: Record<string, { left: number; centerX: number }>;
-  /** 网格高度（两行 + 间距） */
   gridHeight: number;
 }
 
-/**
- * Hook 输入参数
- */
 export interface UseMasonryLayoutProps {
   items: NotionItem[];
   windowWidth: number;
@@ -58,174 +43,64 @@ export interface UseMasonryLayoutProps {
 }
 
 // ============================================================================
-// Grid Occupancy Manager
+// Helper Functions
 // ============================================================================
 
 /**
- * 网格占用管理器
+ * 获取安全的卡片尺寸
+ */
+function getSafeCardSize(size: string | undefined): CardSize {
+  if (size && ['1x1', '1x2', '2x1', '2x2'].includes(size)) {
+    return size as CardSize;
+  }
+  return '1x1';
+}
+
+/**
+ * 计算卡片的垂直位置（top）
  * 
- * 管理二维网格的占用状态，支持查找可用位置和标记占用
+ * 基于中心横线的逻辑：
+ * - 2行高卡片：横线穿过中心，top = centerLineY - height/2
+ * - 1行高卡片：放在上方或下方
+ *   - 上方：bottom = centerLineY - gap/2，所以 top = centerLineY - gap/2 - height
+ *   - 下方：top = centerLineY + gap/2
  */
-class GridOccupancyManager {
-  private occupied: boolean[][];
-  private maxColumn: number = -1;
-  private maxRows: number;
-
-  constructor(maxRows: number) {
-    this.maxRows = maxRows;
-    this.occupied = [];
-    for (let i = 0; i < maxRows; i++) {
-      this.occupied.push([]);
-    }
-  }
-
-  /**
-   * 检查指定位置是否可以放置卡片
-   */
-  canFit(startRow: number, startCol: number, rows: number, cols: number): boolean {
-    if (startRow + rows > this.maxRows) return false;
-
-    for (let r = startRow; r < startRow + rows; r++) {
-      for (let c = startCol; c < startCol + cols; c++) {
-        if (this.occupied[r][c] === true) {
-          return false;
-        }
-      }
-    }
-    return true;
-  }
-
-  /**
-   * 标记单元格为已占用
-   */
-  markOccupied(startRow: number, startCol: number, rows: number, cols: number): void {
-    for (let r = startRow; r < startRow + rows; r++) {
-      for (let c = startCol; c < startCol + cols; c++) {
-        this.occupied[r][c] = true;
-      }
-    }
-    this.maxColumn = Math.max(this.maxColumn, startCol + cols - 1);
-  }
-
-  /**
-   * 查找第一个可用位置
-   */
-  findFirstAvailablePosition(
-    rows: number,
-    cols: number
-  ): { row: number; col: number } {
-    for (let col = 0; col <= Math.max(this.maxColumn + 1, 0); col++) {
-      for (let row = 0; row <= this.maxRows - rows; row++) {
-        if (this.canFit(row, col, rows, cols)) {
-          return { row, col };
-        }
-      }
-    }
-    // 如果没找到，放在最右边新列
-    return { row: 0, col: this.maxColumn + 1 };
-  }
-
-  getMaxColumn(): number {
-    return this.maxColumn;
-  }
-}
-
-// ============================================================================
-// Layout Calculation Helpers
-// ============================================================================
-
-/**
- * 计算非对称内边距
- * 
- * 首尾卡片居中显示，确保视觉平衡
- */
-function calculateAsymmetricPadding(
-  windowWidth: number,
-  firstItemDims: CardPixelDimensions,
-  lastItemDims: CardPixelDimensions,
-  minPadding: number
-): { paddingLeft: number; paddingRight: number } {
-  const paddingLeft = Math.max(0, (windowWidth - firstItemDims.width) / 2);
-  const paddingRight = Math.max(minPadding, (windowWidth - lastItemDims.width) / 2);
-  
-  return { paddingLeft, paddingRight };
-}
-
-/**
- * 计算卡片绝对位置
- */
-function calculateCardPosition(
-  startRow: number,
-  startCol: number,
-  dims: CardPixelDimensions,
-  paddingLeft: number,
-  layout: LayoutConfig
-): CardPosition {
-  const { columnWidth, rowHeight, gap } = layout;
-  
-  const left = paddingLeft + startCol * (columnWidth + gap);
-  const top = startRow * (rowHeight + gap);
-  const centerX = left + dims.width / 2;
-
-  return {
-    top,
-    left,
-    width: dims.width,
-    height: dims.height,
-    centerX,
-  };
-}
-
-/**
- * 计算容器总宽度
- */
-function calculateContainerWidth(
-  positions: CardPosition[],
-  paddingRight: number
+function calculateCardTop(
+  rows: number,
+  height: number,
+  centerLineY: number,
+  gap: number,
+  placeAbove: boolean
 ): number {
-  let maxContentRightEdge = 0;
-  
-  positions.forEach(pos => {
-    if (pos) {
-      const rightEdge = pos.left + pos.width;
-      if (rightEdge > maxContentRightEdge) {
-        maxContentRightEdge = rightEdge;
-      }
+  if (rows === 2) {
+    // 2行高：横线穿过中心
+    return centerLineY - height / 2;
+  } else {
+    // 1行高：上方或下方
+    if (placeAbove) {
+      return centerLineY - gap / 2 - height;
+    } else {
+      return centerLineY + gap / 2;
     }
-  });
-  
-  return maxContentRightEdge + paddingRight;
-}
-
-/**
- * 计算网格高度
- */
-function calculateGridHeight(layout: LayoutConfig): number {
-  const { rowHeight, gap } = layout;
-  return rowHeight * GRID.rows + gap;
+  }
 }
 
 // ============================================================================
 // Main Hook
 // ============================================================================
 
-/**
- * 瀑布流布局计算 Hook
- */
 export function useMasonryLayout({
   items,
   windowWidth,
 }: UseMasonryLayoutProps): MasonryLayoutResult {
   return useMemo(() => {
     const positions: CardPosition[] = [];
-    // 每个分类的目标卡片信息：{ left: 左边缘, centerX: 中心 }
     const categoryTargetInfo: Record<string, { left: number; centerX: number }> = {};
 
     // 防御：无效窗口宽度
     const safeWindowWidth = windowWidth > 0 ? windowWidth : 1920;
-    
-    // 获取响应式布局配置
     const layout = getLayoutConfig(safeWindowWidth);
+    const { gap } = layout;
 
     // 空数据早返回
     if (!items || !Array.isArray(items) || items.length === 0) {
@@ -233,79 +108,140 @@ export function useMasonryLayout({
         cardPositions: positions,
         categoryTargetInfo,
         containerWidth: 0,
-        gridHeight: calculateGridHeight(layout),
+        gridHeight: 0,
       };
     }
 
-    // 计算首尾卡片尺寸（带防御）
-    const firstItem = items[0];
-    const lastItem = items[items.length - 1];
-    const firstSize = (firstItem?.size && ['1x1', '1x2', '2x1', '2x2'].includes(firstItem.size)) 
-      ? firstItem.size as CardSize 
-      : '1x1';
-    const lastSize = (lastItem?.size && ['1x1', '1x2', '2x1', '2x2'].includes(lastItem.size)) 
-      ? lastItem.size as CardSize 
-      : '1x1';
+    // 计算 Intro 卡片尺寸（2x2），确定基准距离
+    const introDims = getCardPixelDimensions('2x2', layout);
+    const baseDistance = introDims.height / 2; // 基准距离 = 2x2卡片边长的一半
     
-    const firstDims = getCardPixelDimensions(firstSize, layout);
-    const lastDims = getCardPixelDimensions(lastSize, layout);
+    // 中心横线的 Y 坐标（相对于容器顶部）
+    // 容器高度 = 2x2卡片高度（因为最大就是2行）
+    const gridHeight = introDims.height;
+    const centerLineY = gridHeight / 2;
 
-    // 计算非对称内边距
-    const { paddingLeft, paddingRight } = calculateAsymmetricPadding(
-      windowWidth,
-      firstDims,
-      lastDims,
-      layout.minPadding
-    );
+    // 当前 X 位置（从左到右排列）
+    let currentX = 0;
+    
+    // Intro 卡片居中显示，左边距 = (屏幕宽度 - 卡片宽度) / 2
+    const introPaddingLeft = (safeWindowWidth - introDims.width) / 2;
+    currentX = introPaddingLeft;
 
-    // 网格占用管理器
-    const gridManager = new GridOccupancyManager(GRID.rows);
+    // 用于追踪上一列的占用情况，决定1行高卡片放上还是下
+    let lastColumnTopUsed = false;
+    let lastColumnBottomUsed = false;
 
-    // 记录每个分类中 Sort 值最小的卡片（Sort 必须存在且 > 0）
+    // 记录每个分类中 Sort 最小的卡片
     const categoryBestCard: Record<string, { sort: number; left: number; centerX: number }> = {};
 
-    // 放置每张卡片
+    // 遍历所有卡片
     items.forEach((item, index) => {
-      // 防御：无效 item
       if (!item) return;
-      
-      // 防御：无效 size，使用默认值
-      const size = (item.size && ['1x1', '1x2', '2x1', '2x2'].includes(item.size)) 
-        ? item.size as CardSize 
-        : '1x1';
 
+      const size = getSafeCardSize(item.size);
       const dims = getCardPixelDimensions(size, layout);
-      const { row: startRow, col: startCol } = gridManager.findFirstAvailablePosition(
-        dims.rows,
-        dims.cols
-      );
+      const { rows, cols, width, height } = dims;
 
-      gridManager.markOccupied(startRow, startCol, dims.rows, dims.cols);
+      let left: number;
+      let top: number;
 
-      const position = calculateCardPosition(startRow, startCol, dims, paddingLeft, layout);
-      positions[index] = position;
+      if (item.type === 'intro') {
+        // Intro：居中于屏幕中心
+        left = introPaddingLeft;
+        top = centerLineY - height / 2;
+        currentX = left + width + gap;
+        lastColumnTopUsed = true;
+        lastColumnBottomUsed = true;
+      } else if (item.type === 'outro') {
+        // Outro：也是 2x2，居中
+        left = currentX;
+        top = centerLineY - height / 2;
+        // Outro 后面不需要继续了
+      } else {
+        // Project 卡片
+        if (rows === 2) {
+          // 2行高卡片：占满整列，横线穿过中心
+          left = currentX;
+          top = calculateCardTop(rows, height, centerLineY, gap, false);
+          currentX = left + width + gap;
+          lastColumnTopUsed = true;
+          lastColumnBottomUsed = true;
+        } else {
+          // 1行高卡片：需要决定放上还是下
+          if (!lastColumnTopUsed) {
+            // 上方空闲，放上方
+            left = currentX;
+            top = calculateCardTop(rows, height, centerLineY, gap, true);
+            lastColumnTopUsed = true;
+            
+            // 如果是2列宽，下方也被占用
+            if (cols === 2) {
+              lastColumnBottomUsed = true;
+              currentX = left + width + gap;
+            }
+          } else if (!lastColumnBottomUsed) {
+            // 下方空闲，放下方
+            left = currentX;
+            top = calculateCardTop(rows, height, centerLineY, gap, false);
+            lastColumnBottomUsed = true;
+            
+            // 如果是2列宽，上方也被占用
+            if (cols === 2) {
+              lastColumnTopUsed = true;
+              currentX = left + width + gap;
+            }
+          } else {
+            // 当前列已满，移到下一列
+            currentX = currentX; // 已经在上一个卡片处理时移动了
+            left = currentX;
+            top = calculateCardTop(rows, height, centerLineY, gap, true);
+            lastColumnTopUsed = true;
+            lastColumnBottomUsed = false;
+            
+            if (cols === 2) {
+              lastColumnBottomUsed = true;
+              currentX = left + width + gap;
+            }
+          }
+          
+          // 如果上下都用了，移动到下一列
+          if (lastColumnTopUsed && lastColumnBottomUsed) {
+            currentX = left + width + gap;
+            lastColumnTopUsed = false;
+            lastColumnBottomUsed = false;
+          }
+        }
 
-      // 只处理 project 类型且有分类的卡片
-      if (item.type === 'project' && item.category && typeof item.category === 'string') {
-        const category = item.category.trim();
-        if (!category) return;
-
-        const sort = item.sort;
-        // Sort 必须是有效数字且 > 0
-        if (typeof sort === 'number' && !isNaN(sort) && isFinite(sort) && sort > 0) {
-          const current = categoryBestCard[category];
-          if (!current || sort < current.sort) {
-            categoryBestCard[category] = {
-              sort,
-              left: position.left,
-              centerX: position.centerX,
-            };
+        // 记录分类目标卡片
+        if (item.category && typeof item.category === 'string') {
+          const category = item.category.trim();
+          if (category) {
+            const sort = item.sort;
+            if (typeof sort === 'number' && !isNaN(sort) && isFinite(sort) && sort > 0) {
+              const current = categoryBestCard[category];
+              if (!current || sort < current.sort) {
+                categoryBestCard[category] = {
+                  sort,
+                  left,
+                  centerX: left + width / 2,
+                };
+              }
+            }
           }
         }
       }
+
+      positions[index] = {
+        top,
+        left,
+        width,
+        height,
+        centerX: left + width / 2,
+      };
     });
 
-    // 将最佳卡片信息转换为目标信息
+    // 设置分类目标信息
     Object.keys(categoryBestCard).forEach(category => {
       const best = categoryBestCard[category];
       categoryTargetInfo[category] = {
@@ -314,9 +250,20 @@ export function useMasonryLayout({
       };
     });
 
-    // 计算容器宽度和网格高度
-    const containerWidth = calculateContainerWidth(positions, paddingRight);
-    const gridHeight = calculateGridHeight(layout);
+    // 计算容器总宽度
+    let containerWidth = 0;
+    positions.forEach(pos => {
+      if (pos) {
+        const rightEdge = pos.left + pos.width;
+        if (rightEdge > containerWidth) {
+          containerWidth = rightEdge;
+        }
+      }
+    });
+    
+    // 加上右边距（让 Outro 能居中）
+    const outroPaddingRight = (safeWindowWidth - introDims.width) / 2;
+    containerWidth += outroPaddingRight;
 
     return {
       cardPositions: positions,
