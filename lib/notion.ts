@@ -130,24 +130,35 @@ export async function getDatabaseItems(): Promise<NotionItem[]> {
           return []; // Return empty array if we can't parse
         }
         
-        const mappedItems = await Promise.all(
-          fallbackData.results.map(async (page: any) => {
-            const item = mapPageToItem(page);
-            // Update Debug field in Notion
-            if (!item.isValid && item.validationError) {
-              await updateNotionDebugField(page.id, item.validationError).catch(() => {
-                // Silently handle errors
-              });
-            } else {
-              // Clear Debug field if item is valid
-              await updateNotionDebugField(page.id, null).catch(() => {
-                // Silently handle errors
-              });
-            }
-            return item;
-          })
-        );
-        return mappedItems;
+        // Step 1: Parse all items first (no API calls)
+        const mappedItems = fallbackData.results.map((page: any) => {
+          return {
+            item: mapPageToItem(page),
+            pageId: page.id,
+          };
+        });
+
+        // Step 2: Extract update promises for Debug field
+        const updatePromises = mappedItems.map(({ item, pageId }: { item: NotionItem; pageId: string }) => {
+          if (!item.isValid && item.validationError) {
+            // Write error to Debug field
+            return updateNotionDebugField(pageId, item.validationError);
+          } else {
+            // Clear Debug field if item is valid
+            return updateNotionDebugField(pageId, null);
+          }
+        });
+
+        // Step 3: Execute all Debug field updates concurrently using Promise.allSettled
+        await Promise.allSettled(updatePromises).then((results) => {
+          const failures = results.filter(result => result.status === 'rejected');
+          if (failures.length > 0) {
+            console.warn(`Failed to update Debug field for ${failures.length} page(s) in fallback. This is non-critical.`);
+          }
+        });
+
+        // Step 4: Return only the items
+        return mappedItems.map(({ item }: { item: NotionItem; pageId: string }) => item);
       }
       
       // For other errors, log and return empty array
@@ -163,25 +174,37 @@ export async function getDatabaseItems(): Promise<NotionItem[]> {
       return []; // Return empty array if we can't parse the response
     }
 
-    const mappedItems = await Promise.all(
-      data.results.map(async (page: any) => {
-        const item = mapPageToItem(page);
-        // Update Debug field in Notion
-        if (!item.isValid && item.validationError) {
-          await updateNotionDebugField(page.id, item.validationError).catch(() => {
-            // Silently handle errors
-          });
-        } else {
-          // Clear Debug field if item is valid
-          await updateNotionDebugField(page.id, null).catch(() => {
-            // Silently handle errors
-          });
-        }
-        return item;
-      })
-    );
+    // Step 1: Parse all items first (no API calls)
+    const mappedItems = data.results.map((page: any) => {
+      return {
+        item: mapPageToItem(page),
+        pageId: page.id,
+      };
+    });
 
-    return mappedItems;
+    // Step 2: Extract update promises for Debug field
+    const updatePromises = mappedItems.map(({ item, pageId }: { item: NotionItem; pageId: string }) => {
+      if (!item.isValid && item.validationError) {
+        // Write error to Debug field
+        return updateNotionDebugField(pageId, item.validationError);
+      } else {
+        // Clear Debug field if item is valid
+        return updateNotionDebugField(pageId, null);
+      }
+    });
+
+    // Step 3: Execute all Debug field updates concurrently using Promise.allSettled
+    // This ensures that even if some API calls fail (e.g., rate limits), 
+    // we still return the parsed items
+    await Promise.allSettled(updatePromises).then((results) => {
+      const failures = results.filter(result => result.status === 'rejected');
+      if (failures.length > 0) {
+        console.warn(`Failed to update Debug field for ${failures.length} page(s). This is non-critical.`);
+      }
+    });
+
+    // Step 4: Return only the items
+    return mappedItems.map(({ item }: { item: NotionItem; pageId: string }) => item);
   } catch (error: any) {
     console.error('Error fetching Notion database:', error);
     console.error('Error details:', {
@@ -322,20 +345,25 @@ function mapPageToItem(page: any): NotionItem {
       isValid = false;
     }
 
-    // Extract category (Category select) - REQUIRED for project type
+    // Extract category (Category select) - REQUIRED only for project type
     let category = '';
     try {
       category = props.Category?.select?.name || '';
       
+      // Category is only required for project type
+      // intro and outro types can have empty category
       if (type === 'project' && (!category || category.trim() === '')) {
-        validationErrors.push('Category is required for project type');
+        validationErrors.push('Project requires a Category');
         isValid = false;
       }
+      // For intro/outro, category is optional - no validation error
     } catch (error) {
+      // Only fail validation if it's a project type
       if (type === 'project') {
         validationErrors.push('Category extraction failed');
         isValid = false;
       }
+      // For intro/outro, silently allow empty category
     }
 
     // Extract sort (Sort number field)

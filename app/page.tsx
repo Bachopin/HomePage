@@ -17,13 +17,26 @@ export default async function Home() {
     // Fetch data from Notion
     const rawData = await getDatabaseItems();
     
+    // Step 1: Filter out invalid items FIRST (isValid: false)
+    // This ensures we only work with valid data throughout the rest of the logic
+    const validItems = rawData.filter(item => item.isValid === true);
+    
+    // Log validation errors for debugging
+    const invalidItems = rawData.filter(item => item.isValid === false);
+    if (invalidItems.length > 0) {
+      console.warn(`Filtered out ${invalidItems.length} invalid item(s):`, 
+        invalidItems.map(item => ({ id: item.id, title: item.title, type: item.type, error: item.validationError }))
+      );
+    }
+    
+    // Step 2: Extract items by type from VALID items only
     // Sort Logic - "Sandwich" Order:
     // 1. Filter out item where type === 'intro' -> Place FIRST
     // 2. Filter out item where type === 'outro' -> Place LAST
     // 3. All other type === 'project' items go in the middle, grouped by category
-    const introItem = rawData.find(item => item.type === 'intro');
-    const outroItem = rawData.find(item => item.type === 'outro');
-    const projectItems = rawData.filter(item => item.type === 'project');
+    const introItem = validItems.find(item => item.type === 'intro');
+    const outroItem = validItems.find(item => item.type === 'outro');
+    const projectItems = validItems.filter(item => item.type === 'project');
     
     // Get all unique categories from project items
     const projectCategories = projectItems
@@ -71,21 +84,13 @@ export default async function Home() {
     
     // Filter out items without category (do not display them)
     
+    // Step 3: Build sorted items array (all items are already valid at this point)
     const sortedItems: NotionItem[] = [];
     if (introItem) sortedItems.push(introItem);
     sortedItems.push(...sortedProjectItems);
     if (outroItem) sortedItems.push(outroItem);
     
-    // Filter out invalid items (isValid: false)
-    items = sortedItems.filter(item => item.isValid === true);
-    
-    // Log validation errors for debugging
-    const invalidItems = sortedItems.filter(item => item.isValid === false);
-    if (invalidItems.length > 0) {
-      console.warn(`Filtered out ${invalidItems.length} invalid item(s):`, 
-        invalidItems.map(item => ({ id: item.id, title: item.title, error: item.validationError }))
-      );
-    }
+    items = sortedItems;
     
     // Navigation categories - must match the order of cards
     categories = ['All', ...finalCategoryOrder];
