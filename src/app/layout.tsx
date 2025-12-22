@@ -1,10 +1,10 @@
-import type { Metadata } from "next";
-import "./globals.css";
-import CrosshairToggle from "@/components/ui/CrosshairToggle";
+import type { Metadata } from 'next';
+import './globals.css';
+import { CrosshairToggle } from '@/components/ui';
 
 export const metadata: Metadata = {
-  title: "Personal Homepage",
-  description: "Developer and product designer",
+  title: 'Personal Homepage',
+  description: 'Developer and product designer',
 };
 
 export default function RootLayout({

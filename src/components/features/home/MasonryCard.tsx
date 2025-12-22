@@ -1,17 +1,19 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { motion, MotionValue } from 'framer-motion';
+import type { MotionValue } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { ArrowUpRight } from 'lucide-react';
-import { useParallax, ImageSize } from '@/hooks/useParallax';
+import { useParallax } from '@/hooks';
+import type { ImageSize } from '@/hooks';
 import {
   ANIMATION,
   UI,
   getLayoutConfig,
   getCardPixelDimensions,
-  CardSize,
-  DEFAULTS,
 } from '@/lib/config';
+import type { CardSize } from '@/lib/config';
+import { DEFAULTS } from '@/lib/config';
 
 // ============================================================================
 // Types

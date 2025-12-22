@@ -2,11 +2,10 @@
 
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { motion, useScroll, useSpring, useTransform } from 'framer-motion';
-import Navigation from '@/components/layout/Navigation';
-import MasonryCard from '@/components/features/home/MasonryCard';
-import { NotionItem } from '@/lib/notion';
-import { useMasonryLayout } from '@/hooks/useMasonryLayout';
-import { useScrollSpy } from '@/hooks/useScrollSpy';
+import { Navigation } from '@/components/layout';
+import { MasonryCard } from '@/components/features/home';
+import type { NotionItem } from '@/lib/notion';
+import { useMasonryLayout, useScrollSpy } from '@/hooks';
 import { ANIMATION, SCROLL, DEFAULTS } from '@/lib/config';
 
 // ============================================================================

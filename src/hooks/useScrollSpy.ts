@@ -1,5 +1,7 @@
-import { useState, useCallback, RefObject } from 'react';
-import { MotionValue, useMotionValueEvent } from 'framer-motion';
+import type { RefObject } from 'react';
+import { useState, useCallback } from 'react';
+import type { MotionValue } from 'framer-motion';
+import { useMotionValueEvent } from 'framer-motion';
 import { SCROLL } from '@/lib/config';
 
 /**

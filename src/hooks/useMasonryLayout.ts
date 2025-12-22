@@ -11,15 +11,13 @@
  */
 
 import { useMemo } from 'react';
-import { NotionItem } from '@/lib/notion';
+import type { NotionItem } from '@/lib/notion';
 import {
   getLayoutConfig,
   getCardPixelDimensions,
   GRID,
-  CardSize,
-  LayoutConfig,
-  CardPixelDimensions,
 } from '@/lib/config';
+import type { CardSize, LayoutConfig, CardPixelDimensions } from '@/lib/config';
 
 // ============================================================================
 // Types

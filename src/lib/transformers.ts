@@ -1,4 +1,4 @@
-import { NotionItem } from './notion';
+import type { NotionItem } from './notion';
 
 /**
  * 处理后的首页数据结构

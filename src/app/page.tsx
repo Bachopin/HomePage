@@ -1,10 +1,45 @@
+import type { Metadata } from 'next';
 import { getDatabaseItems, getCategoryOrder } from '@/lib/notion';
 import { processHomePageItems } from '@/lib/transformers';
-import HomeClient from '@/components/features/home/HomeClient';
-import ErrorBoundary from '@/components/ui/ErrorBoundary';
+import { METADATA } from '@/lib/config';
+import { HomeClient } from '@/components/features/home';
+import { ErrorBoundary } from '@/components/ui';
 
-// Incremental Static Regeneration (ISR) - revalidate every hour
+// ============================================================================
+// SEO Metadata
+// ============================================================================
+
+export const metadata: Metadata = {
+  title: METADATA.title,
+  description: METADATA.description,
+  keywords: METADATA.keywords,
+  authors: [{ name: METADATA.author }],
+  openGraph: {
+    title: METADATA.title,
+    description: METADATA.description,
+    type: METADATA.openGraph.type as 'website',
+    locale: METADATA.openGraph.locale,
+    siteName: METADATA.openGraph.siteName,
+    url: METADATA.siteUrl,
+  },
+  twitter: {
+    card: METADATA.twitter.card as 'summary_large_image',
+    title: METADATA.title,
+    description: METADATA.description,
+  },
+  metadataBase: new URL(METADATA.siteUrl),
+};
+
+// ============================================================================
+// ISR Configuration
+// ============================================================================
+
+// Incremental Static Regeneration - revalidate every 36 seconds
 export const revalidate = 36;
+
+// ============================================================================
+// Page Component
+// ============================================================================
 
 export default async function Home() {
   try {

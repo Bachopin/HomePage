@@ -8,7 +8,8 @@
  */
 
 import { useMemo } from 'react';
-import { MotionValue, useTransform, useMotionValue } from 'framer-motion';
+import type { MotionValue } from 'framer-motion';
+import { useTransform, useMotionValue } from 'framer-motion';
 import { ANIMATION } from '@/lib/config';
 
 // ============================================================================

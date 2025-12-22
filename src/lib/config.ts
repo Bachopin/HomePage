@@ -225,3 +225,47 @@ export const DEFAULTS = {
   /** 默认分类列表 */
   categories: ['All', 'Work', 'Lab', 'Life'] as const,
 } as const;
+
+// ============================================================================
+// SEO Metadata - SEO 元数据配置
+// ============================================================================
+
+export interface MetadataConfig {
+  title: string;
+  description: string;
+  keywords: string[];
+  author: string;
+  siteUrl: string;
+  openGraph: {
+    type: string;
+    locale: string;
+    siteName: string;
+  };
+  twitter: {
+    card: string;
+  };
+}
+
+export const METADATA: MetadataConfig = {
+  title: 'Personal Homepage',
+  description: 'Developer and product designer portfolio showcasing creative works, projects, and experiments.',
+  keywords: [
+    'portfolio',
+    'developer',
+    'designer',
+    'creative',
+    'projects',
+    'web development',
+    'product design',
+  ],
+  author: 'Bachopin',
+  siteUrl: 'https://bachopin.com',
+  openGraph: {
+    type: 'website',
+    locale: 'zh_CN',
+    siteName: 'Personal Homepage',
+  },
+  twitter: {
+    card: 'summary_large_image',
+  },
+} as const;

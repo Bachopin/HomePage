@@ -17,26 +17,30 @@ src/
 ├── app/                          # Next.js App Router
 │   ├── globals.css               # 全局样式
 │   ├── layout.tsx                # 根布局
-│   └── page.tsx                  # 首页（SSR + ISR）
+│   └── page.tsx                  # 首页（SSR + ISR + SEO）
 ├── components/
 │   ├── ui/                       # 通用基础组件
+│   │   ├── index.ts              # 桶文件导出
 │   │   ├── CrosshairToggle.tsx   # 十字准星暗色模式切换
 │   │   ├── DarkModeToggle.tsx    # 暗色模式开关
 │   │   ├── ErrorBoundary.tsx     # 错误边界
 │   │   ├── InteractiveList.tsx   # 交互列表
 │   │   └── TypedText.tsx         # 打字机效果
 │   ├── layout/                   # 全局布局组件
+│   │   ├── index.ts              # 桶文件导出
 │   │   └── Navigation.tsx        # 导航栏
 │   └── features/home/            # 首页业务组件
+│       ├── index.ts              # 桶文件导出
 │       ├── HomeClient.tsx        # 首页客户端组件（指挥官）
 │       └── MasonryCard.tsx       # 瀑布流卡片
 ├── hooks/                        # 自定义 Hooks
+│   ├── index.ts                  # 桶文件导出
 │   ├── useMasonryLayout.ts       # 瀑布流布局计算
 │   ├── useMouse.ts               # 鼠标位置追踪
 │   ├── useParallax.ts            # 视差物理引擎
 │   └── useScrollSpy.ts           # 滚动监听与导航
 └── lib/                          # 工具库
-    ├── config.ts                 # 全局配置中心（Single Source of Truth）
+    ├── config.ts                 # 全局配置中心（含 SEO 元数据）
     ├── notion.ts                 # Notion API 服务
     └── transformers.ts           # 数据转换器
 ```
@@ -45,7 +49,7 @@ src/
 
 ### 单一事实来源 (Single Source of Truth)
 
-所有布局、动画、响应式断点的常量集中在 `lib/config.ts`：
+所有布局、动画、响应式断点、SEO 元数据集中在 `lib/config.ts`：
 
 - `BREAKPOINTS` - 响应式断点
 - `LAYOUT_DESKTOP/MOBILE` - 布局配置（列宽、间距、内边距）
@@ -53,6 +57,7 @@ src/
 - `ANIMATION` - 动画参数（缩放、弹簧配置、视差系数）
 - `SCROLL` - 滚动配置
 - `UI` - UI 常量（圆角、图标尺寸）
+- `METADATA` - SEO 元数据（title, description, keywords, OpenGraph）
 
 ### 组件职责分离
 
@@ -63,6 +68,27 @@ src/
 | `useParallax` | 视差物理引擎，几何计算 |
 | `useMasonryLayout` | 瀑布流布局算法 |
 | `useScrollSpy` | 滚动位置监听与导航 |
+
+### 模块导入规范
+
+项目使用桶文件 (Barrel Files) 简化导入路径：
+
+```typescript
+// ✅ 推荐：使用桶文件
+import { HomeClient } from '@/components/features/home';
+import { ErrorBoundary, CrosshairToggle } from '@/components/ui';
+import { useMasonryLayout, useParallax } from '@/hooks';
+
+// ❌ 避免：深层路径
+import HomeClient from '@/components/features/home/HomeClient';
+```
+
+类型导入使用 `import type` 语法：
+
+```typescript
+import type { NotionItem } from '@/lib/notion';
+import type { CardSize, LayoutConfig } from '@/lib/config';
+```
 
 ## 环境配置
 
@@ -112,6 +138,9 @@ npm start
 - **暗色模式** - 支持系统偏好和手动切换
 - **ISR 增量更新** - 每 36 秒重新验证数据
 - **三明治结构** - intro → projects → outro 的内容组织
+- **完整 SEO** - OpenGraph、Twitter Cards、结构化元数据
+- **类型安全** - 严格 TypeScript 类型定义
+- **零魔术数字** - 所有常量集中配置
 
 ## License
 
