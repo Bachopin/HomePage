@@ -17,6 +17,12 @@ interface MasonryCardProps {
   cardIndex?: number; // Index for calculating card position
   totalCards?: number; // Total number of cards
   cardPosition?: number; // Absolute X position of card center (from parent)
+  absolutePosition?: {
+    top: number;
+    left: number;
+    width: number;
+    height: number;
+  };
 }
 
 export default function MasonryCard({ 
@@ -31,7 +37,8 @@ export default function MasonryCard({
   description,
   cardIndex = 0,
   totalCards = 1,
-  cardPosition
+  cardPosition,
+  absolutePosition
 }: MasonryCardProps) {
   const [isHovered, setIsHovered] = useState(false);
   const [imageLoaded, setImageLoaded] = useState(false);
@@ -228,10 +235,23 @@ export default function MasonryCard({
         }
       : {};
 
+    // Use absolute positioning if provided, otherwise use grid
+    const positionStyle = absolutePosition
+      ? {
+          position: 'absolute' as const,
+          top: `${absolutePosition.top}px`,
+          left: `${absolutePosition.left}px`,
+          width: `${absolutePosition.width}px`,
+          height: `${absolutePosition.height}px`,
+        }
+      : {
+          width: config.width,
+        };
+
     return (
       <motion.div
-        className={`group relative overflow-hidden rounded-[32px] ${hasLink ? 'cursor-pointer' : 'cursor-default'} bg-black dark:bg-white ${config.gridArea}`}
-        style={{ width: config.width }}
+        className={`group relative overflow-hidden rounded-[32px] ${hasLink ? 'cursor-pointer' : 'cursor-default'} bg-black dark:bg-white ${absolutePosition ? '' : config.gridArea}`}
+        style={positionStyle}
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
         whileHover={{ scale: 1.02 }}
@@ -282,10 +302,23 @@ export default function MasonryCard({
       }
     : {};
 
+  // Use absolute positioning if provided, otherwise use grid
+  const positionStyle = absolutePosition
+    ? {
+        position: 'absolute' as const,
+        top: `${absolutePosition.top}px`,
+        left: `${absolutePosition.left}px`,
+        width: `${absolutePosition.width}px`,
+        height: `${absolutePosition.height}px`,
+      }
+    : {
+        width: config.width,
+      };
+
   return (
     <motion.div
-      className={`group relative overflow-hidden rounded-[32px] ${hasLink ? 'cursor-pointer' : 'cursor-default'} bg-neutral-200 dark:bg-neutral-800 ${config.gridArea}`}
-      style={{ width: config.width }}
+      className={`group relative overflow-hidden rounded-[32px] ${hasLink ? 'cursor-pointer' : 'cursor-default'} bg-neutral-200 dark:bg-neutral-800 ${absolutePosition ? '' : config.gridArea}`}
+      style={positionStyle}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
       whileHover={{ scale: 1.02 }}

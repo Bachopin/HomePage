@@ -11,6 +11,14 @@ interface HomeClientProps {
   categories?: string[];
 }
 
+interface CardPosition {
+  top: number;
+  left: number;
+  width: number;
+  height: number;
+  centerX: number;
+}
+
 export default function HomeClient({ items, categories = ['All', 'Work', 'Lab', 'Life'] }: HomeClientProps) {
   const contentRef = useRef<HTMLDivElement>(null);
   const [activeSection, setActiveSection] = useState<string>('All');
@@ -61,53 +69,101 @@ export default function HomeClient({ items, categories = ['All', 'Work', 'Lab', 
   });
   const springX = useSpring(x, { stiffness: 400, damping: 40 });
 
-  // Grid simulator: Calculate card positions in a 2-row grid layout
-  // This simulates CSS grid-auto-flow: column behavior (fills columns top-to-bottom, then moves to next column)
-  // Also pre-calculates categoryAnchorPositions for O(1) lookup during scroll
-  const { categoryOffsets, cardPositions, cardLeftEdges, cardWidths, categoryAnchorPositions } = useMemo(() => {
-    const offsets: Record<string, number> = {};
-    const positions: number[] = [];
-    const leftEdges: number[] = [];
-    const widths: number[] = [];
-    const anchorPositions: Record<string, number> = {}; // Map: category -> centerX of first card (lowest sort)
+  // Task 1: Sort Items (Critical)
+  // Sort logic: Map each item's category to the index in the categories prop
+  // Primary Sort: Category Index (ascending)
+  // Secondary Sort: item.sort (ascending)
+  // Tertiary Sort: item.year (descending)
+  const sortedItems = useMemo(() => {
+    if (!items || items.length === 0) return [];
+
+    // Create a map of category to index for O(1) lookup
+    const categoryIndexMap = new Map<string, number>();
+    categories.forEach((cat, idx) => {
+      if (cat !== 'All') {
+        categoryIndexMap.set(cat, idx);
+      }
+    });
+
+    // Sort items
+    return [...items].sort((a, b) => {
+      // Handle intro/outro items (always at start/end)
+      if (a.type === 'intro' && b.type !== 'intro') return -1;
+      if (a.type !== 'intro' && b.type === 'intro') return 1;
+      if (a.type === 'outro' && b.type !== 'outro') return 1;
+      if (a.type !== 'outro' && b.type === 'outro') return -1;
+      
+      // Both are projects or both are intro/outro
+      if (a.type === 'project' && b.type === 'project') {
+        const catA = a.category || '';
+        const catB = b.category || '';
+        
+        // Primary: Category Index
+        const idxA = categoryIndexMap.get(catA) ?? Infinity;
+        const idxB = categoryIndexMap.get(catB) ?? Infinity;
+        
+        if (idxA !== idxB) {
+          return idxA - idxB;
+        }
+        
+        // Secondary: Sort field (ascending)
+        const sortA = a.sort ?? Infinity;
+        const sortB = b.sort ?? Infinity;
+        
+        if (sortA !== sortB) {
+          return sortA - sortB;
+        }
+        
+        // Tertiary: Year (descending)
+        const yearA = parseInt(a.year || '0', 10) || 0;
+        const yearB = parseInt(b.year || '0', 10) || 0;
+        
+        return yearB - yearA;
+      }
+      
+      // Maintain relative order for intro/outro
+      return 0;
+    });
+  }, [items, categories]);
+
+  // Task 2: Switch to Absolute Positioning
+  // Grid simulator: Calculate absolute positions (top, left, width, height) for EVERY item
+  const { cardPositions, categoryStartX, containerWidth } = useMemo(() => {
+    const positions: CardPosition[] = [];
+    const categoryStarts: Record<string, number> = {};
     const gap = 24; // 1.5rem
     const columnWidth = 300; // Base column width
-    // Calculate intro padding safely (windowWidth should be set by useEffect on client)
+    const rowHeight = 300; // Base row height
     const introPadding = (windowWidth && windowWidth > 0) ? windowWidth / 2 - 312 : 0;
 
     // Early return if no items
-    if (!items || items.length === 0) {
+    if (!sortedItems || sortedItems.length === 0) {
       return { 
-        categoryOffsets: offsets, 
-        cardPositions: positions, 
-        cardLeftEdges: leftEdges, 
-        cardWidths: widths,
-        categoryAnchorPositions: anchorPositions
+        cardPositions: positions,
+        categoryStartX: categoryStarts,
+        containerWidth: 0
       };
     }
 
     // Grid occupancy map: 2 rows, dynamically expanding columns
-    // occupied[row][column] = true if that cell is occupied
     const occupied: boolean[][] = [[], []]; // [row0, row1]
     let maxColumn = -1;
 
     // Helper function to get card dimensions in grid units
-    const getCardDimensions = (size: string): { rows: number; cols: number; width: number } => {
+    const getCardDimensions = (size: string): { rows: number; cols: number; width: number; height: number } => {
       switch (size) {
-        case '1x1': return { rows: 1, cols: 1, width: columnWidth };
-        case '1x2': return { rows: 2, cols: 1, width: columnWidth };
-        case '2x1': return { rows: 1, cols: 2, width: columnWidth * 2 + gap };
-        case '2x2': return { rows: 2, cols: 2, width: columnWidth * 2 + gap };
-        default: return { rows: 1, cols: 1, width: columnWidth };
+        case '1x1': return { rows: 1, cols: 1, width: columnWidth, height: rowHeight };
+        case '1x2': return { rows: 2, cols: 1, width: columnWidth, height: rowHeight * 2 + gap };
+        case '2x1': return { rows: 1, cols: 2, width: columnWidth * 2 + gap, height: rowHeight };
+        case '2x2': return { rows: 2, cols: 2, width: columnWidth * 2 + gap, height: rowHeight * 2 + gap };
+        default: return { rows: 1, cols: 1, width: columnWidth, height: rowHeight };
       }
     };
 
     // Helper function to check if a position can fit a card
     const canFit = (startRow: number, startCol: number, rows: number, cols: number): boolean => {
-      // Check if out of bounds
       if (startRow + rows > 2) return false;
       
-      // Check all cells that would be occupied
       for (let r = startRow; r < startRow + rows; r++) {
         for (let c = startCol; c < startCol + cols; c++) {
           if (occupied[r][c] === true) {
@@ -129,27 +185,19 @@ export default function HomeClient({ items, categories = ['All', 'Work', 'Lab', 
     };
 
     // Place each card in the grid
-    // CSS grid-auto-flow: column behavior:
-    // - Fills columns first (top-to-bottom within each column)
-    // - Then moves to the next column
-    // - For multi-column items, they span from their start column
-    items.forEach((item, index) => {
-      // Safety check: ensure item.size is valid
+    sortedItems.forEach((item, index) => {
       if (!item || !item.size) {
         console.warn(`Item at index ${index} has invalid size:`, item);
-        return; // Skip invalid items
+        return;
       }
       
-      const { rows, cols, width } = getCardDimensions(item.size);
+      const { rows, cols, width, height } = getCardDimensions(item.size);
       
       // Find the first available position
-      // Search column by column (left to right), row by row within each column (top to bottom)
       let placed = false;
       let startRow = 0;
       let startCol = 0;
 
-      // Start from column 0, check each column
-      // For each column, check rows from top (0) to bottom (2-rows)
       for (let col = 0; col <= Math.max(maxColumn + 1, 0); col++) {
         for (let row = 0; row <= 2 - rows; row++) {
           if (canFit(row, col, rows, cols)) {
@@ -162,60 +210,58 @@ export default function HomeClient({ items, categories = ['All', 'Work', 'Lab', 
         if (placed) break;
       }
 
-      // If still not placed (shouldn't happen, but safety), place at next column
       if (!placed) {
         startCol = maxColumn + 1;
         startRow = 0;
         placed = true;
       }
 
-      // Mark cells as occupied
       markOccupied(startRow, startCol, rows, cols);
 
-      // Calculate actual pixel positions based on column position
-      // Each column is columnWidth wide, with gap between columns
-      // For multi-column items (2x1, 2x2), they span 2 columns, so width includes gap
-      const leftEdge = introPadding + startCol * (columnWidth + gap);
-      const centerX = leftEdge + width / 2;
+      // Calculate absolute positions
+      const left = introPadding + startCol * (columnWidth + gap);
+      const top = startRow * (rowHeight + gap);
+      const centerX = left + width / 2;
 
-      // Store positions
-      leftEdges[index] = leftEdge;
-      positions[index] = centerX;
-      widths[index] = width;
+      positions[index] = {
+        top,
+        left,
+        width,
+        height,
+        centerX
+      };
 
-      // Track category offsets (first card of each category) - using leftEdge
-      if (item.type !== 'intro' && item.type !== 'outro' && item.category) {
-        if (offsets[item.category] === undefined) {
-          offsets[item.category] = leftEdge;
-        }
-      }
-
-      // Track category anchor positions (centerX of first card with lowest sort) - using centerX
-      // Since items are already sorted by sort value within each category,
-      // the first card we encounter for a category is the anchor card
-      if (item.type !== 'intro' && item.type !== 'outro' && item.category) {
-        if (anchorPositions[item.category] === undefined) {
-          anchorPositions[item.category] = centerX;
+      // Track category start positions (left edge of first card in category)
+      if (item.type === 'project' && item.category) {
+        if (categoryStarts[item.category] === undefined) {
+          categoryStarts[item.category] = left;
         }
       }
     });
 
-    return { 
-      categoryOffsets: offsets, 
-      cardPositions: positions, 
-      cardLeftEdges: leftEdges, 
-      cardWidths: widths,
-      categoryAnchorPositions: anchorPositions
-    };
-  }, [items, windowWidth]);
+    // Calculate container width
+    const finalWidth = introPadding * 2 + (maxColumn + 1) * (columnWidth + gap) - gap;
 
-  // Track active section based on card center passing through viewport center (crosshair position)
-  // Optimized: Uses pre-calculated categoryAnchorPositions for O(1) lookup instead of nested loops
+    return {
+      cardPositions: positions,
+      categoryStartX: categoryStarts,
+      containerWidth: finalWidth
+    };
+  }, [sortedItems, windowWidth]);
+
+  // Update contentWidth when containerWidth changes
+  useEffect(() => {
+    if (containerWidth > 0) {
+      setContentWidth(containerWidth);
+    }
+  }, [containerWidth]);
+
+  // Task 3: Robust Scroll Spy & Navigation
+  // Use ranges, not centers: Active Category is where currentScrollX >= categoryStartX AND currentScrollX < nextCategoryStartX
+  // End-of-Scroll Override: If currentScrollX is within 50px of maxScroll, FORCE the active section to be the LAST category
   useMotionValueEvent(springX, 'change', (latest) => {
     try {
-      // Safety checks: ensure we have valid data
-      // Allow empty categoryAnchorPositions during initial render - just set to 'All'
-      if (!categoryAnchorPositions || Object.keys(categoryAnchorPositions).length === 0) {
+      if (!categoryStartX || Object.keys(categoryStartX).length === 0) {
         setActiveSection('All');
         return;
       }
@@ -226,87 +272,84 @@ export default function HomeClient({ items, categories = ['All', 'Work', 'Lab', 
         return;
       }
 
-      // Ensure windowWidth is valid
       if (!windowWidth || windowWidth <= 0 || isNaN(windowWidth)) {
         setActiveSection('All');
         return;
       }
 
-      const viewportCenter = windowWidth / 2; // Crosshair position (center of viewport)
-      
-      // O(1) lookup: Use pre-calculated categoryAnchorPositions to find closest category
-      // latest is negative (content moving left), so card position = cardAbsoluteX + latest
-      let activeCategory = 'All';
-      let closestCategory = 'All';
-      let minDistance = Infinity;
-      
-      // Get ordered categories (excluding 'All' - it's a virtual tab)
+      // End-of-Scroll Override: If within 50px of maxScroll, force last category
+      const scrollThreshold = 50;
+      if (Math.abs(latest - maxScroll) < scrollThreshold) {
+        const orderedCategories = categories.filter((c) => c !== 'All');
+        if (orderedCategories.length > 0) {
+          setActiveSection(orderedCategories[orderedCategories.length - 1]);
+          return;
+        }
+      }
+
+      // Range-based logic: Find which category's range contains the current scroll position
+      // latest is negative (content moving left), so to find what absolute position is at viewport center:
+      // If a card is at absolute position X, and springX = latest, the card's visible position is X + latest
+      // We want to find which category's start position, when transformed by latest, is at viewport center
+      // So: categoryStartX + latest = viewportCenter
+      // Therefore: categoryStartX = viewportCenter - latest
+      // But we need to check ranges, so we check if viewportCenter - latest is within a category's range
+      const viewportCenter = windowWidth / 2;
+      // The absolute position currently visible at viewport center
+      const absoluteXAtViewportCenter = viewportCenter - latest;
+
       const orderedCategories = categories.filter((c) => c !== 'All');
-      if (!orderedCategories.length) {
+      if (orderedCategories.length === 0) {
         setActiveSection('All');
         return;
       }
 
-      // O(n) iteration over categories (typically 3-5 categories), not O(n*m) over items
-      for (const category of orderedCategories) {
-        try {
-          const anchorCenterX = categoryAnchorPositions[category];
-          
-          // Skip if anchor position not found
-          if (anchorCenterX === undefined || isNaN(anchorCenterX)) {
-            continue;
-          }
+      // Find the active category based on ranges
+      let activeCategory = 'All';
 
-          // Calculate current anchor card center position (accounting for scroll transform)
-          const cardCurrentCenterX = anchorCenterX + latest; // latest is negative
-          
-          // Calculate distance from anchor card center to viewport center
-          const distance = Math.abs(cardCurrentCenterX - viewportCenter);
-          
-          // Track the category whose anchor card center is closest to viewport center
-          if (distance < minDistance && !isNaN(distance)) {
-            minDistance = distance;
-            closestCategory = category;
-          }
-        } catch (err) {
-          // Silently skip this category if there's an error
-          console.warn('Error processing category:', category, err);
+      for (let i = 0; i < orderedCategories.length; i++) {
+        const category = orderedCategories[i];
+        const categoryStart = categoryStartX[category];
+
+        if (categoryStart === undefined || isNaN(categoryStart)) {
+          continue;
         }
-      }
 
-      // Use the closest category, or 'All' if none found
-      if (closestCategory !== 'All') {
-        activeCategory = closestCategory;
-      } else if (orderedCategories.length > 0) {
-        // If no category found yet, check if we're at the very end
-        // In that case, select the last category
-        try {
-          const lastCategory = orderedCategories[orderedCategories.length - 1];
-          const lastAnchorCenterX = categoryAnchorPositions[lastCategory];
-          
-          if (lastAnchorCenterX !== undefined && !isNaN(lastAnchorCenterX)) {
-            const cardCurrentCenterX = lastAnchorCenterX + latest;
-            // If the last category's anchor card center has passed center, select it
-            if (cardCurrentCenterX < viewportCenter && !isNaN(cardCurrentCenterX)) {
-              activeCategory = lastCategory;
+        // Check if this is the last category
+        if (i === orderedCategories.length - 1) {
+          // Last category: active if absoluteXAtViewportCenter >= categoryStart
+          if (absoluteXAtViewportCenter >= categoryStart) {
+            activeCategory = category;
+            break;
+          }
+        } else {
+          // Not last category: find next category's start
+          const nextCategory = orderedCategories[i + 1];
+          const nextCategoryStart = categoryStartX[nextCategory];
+
+          if (nextCategoryStart !== undefined && !isNaN(nextCategoryStart)) {
+            // Active if absoluteXAtViewportCenter >= categoryStart AND absoluteXAtViewportCenter < nextCategoryStart
+            if (absoluteXAtViewportCenter >= categoryStart && absoluteXAtViewportCenter < nextCategoryStart) {
+              activeCategory = category;
+              break;
+            }
+          } else {
+            // If next category has no start, this category is active if absoluteXAtViewportCenter >= categoryStart
+            if (absoluteXAtViewportCenter >= categoryStart) {
+              activeCategory = category;
             }
           }
-        } catch (err) {
-          // Fallback to 'All' if there's an error
-          console.warn('Error processing last category:', err);
         }
       }
 
       setActiveSection(activeCategory);
     } catch (error) {
-      // Catch any unexpected errors and prevent component crash
       console.error('Error in useMotionValueEvent:', error);
       setActiveSection('All');
     }
   });
 
-  // Scroll to category function - align card center to viewport center (crosshair position)
-  // Optimized: Uses pre-calculated categoryAnchorPositions for O(1) lookup
+  // Scroll to category function - clamp target scroll value so it doesn't exceed maxScroll
   const scrollToCategory = (category: string) => {
     try {
       if (category === 'All') {
@@ -314,9 +357,8 @@ export default function HomeClient({ items, categories = ['All', 'Work', 'Lab', 
         return;
       }
 
-      // Safety checks
-      if (!categoryAnchorPositions || Object.keys(categoryAnchorPositions).length === 0) {
-        console.warn('Cannot scroll: missing categoryAnchorPositions');
+      if (!categoryStartX || Object.keys(categoryStartX).length === 0) {
+        console.warn('Cannot scroll: missing categoryStartX');
         return;
       }
 
@@ -325,55 +367,35 @@ export default function HomeClient({ items, categories = ['All', 'Work', 'Lab', 
         return;
       }
 
-      // O(1) lookup: Get the anchor card center position for this category
-      const firstCardCenterX = categoryAnchorPositions[category.trim()];
+      const categoryStart = categoryStartX[category.trim()];
       
-      if (firstCardCenterX === undefined || isNaN(firstCardCenterX)) {
-        // Debug: Log all available categories
-        const availableCategories = Object.keys(categoryAnchorPositions);
-        console.warn(`No anchor position found for category: "${category}"`);
+      if (categoryStart === undefined || isNaN(categoryStart)) {
+        const availableCategories = Object.keys(categoryStartX);
+        console.warn(`No start position found for category: "${category}"`);
         console.log('Available categories:', availableCategories);
         return;
       }
 
-      // Calculate the target translateX value to align card center to viewport center (crosshair)
-      // cardPositions[index] is the absolute position of card center (relative to page left)
-      // When springX = 0, card center is at cardPositions[index]
-      // When springX = -100, card moves left by 100px, so card center is at cardPositions[index] - 100
-      // We want: cardPositions[index] + springX = viewportCenter
-      // So: springX = viewportCenter - cardPositions[index]
-      const viewportCenter = windowWidth / 2; // Crosshair position
-      const targetTranslateX = viewportCenter - firstCardCenterX;
+      // Calculate target: align category start to viewport center
+      // When springX = targetTranslateX, the card at categoryStart will be at:
+      // categoryStart + targetTranslateX = viewportCenter
+      // So: targetTranslateX = viewportCenter - categoryStart
+      const viewportCenter = windowWidth / 2;
+      const targetTranslateX = viewportCenter - categoryStart;
 
-      // Inverse map: find scrollY that produces this translateX
-      // x maps scrollY [300, 4000] -> x [0, maxScroll]
-      // Formula: x = (scrollY - 300) / (4000 - 300) * maxScroll
-      // Solving for scrollY: scrollY = 300 + (x / maxScroll) * (4000 - 300)
+      // Clamp targetTranslateX to valid range [maxScroll, 0]
+      const clampedTranslateX = Math.max(Math.min(targetTranslateX, 0), maxScroll);
       
-      // Defensive check: Ensure maxScroll is never 0 when used as a divisor
+      // Defensive check: Ensure maxScroll is valid
       if (maxScroll === 0 || Math.abs(maxScroll) < 0.001 || isNaN(maxScroll)) {
         console.warn('Max scroll is 0 or invalid, cannot scroll. maxScroll:', maxScroll);
         return;
       }
       
-      // targetTranslateX is what we want springX to be
-      // If targetTranslateX is positive, card is to the left, we can't scroll right (springX can only be negative)
-      // If targetTranslateX is negative, card is to the right, we can scroll left
-      // Clamp targetTranslateX to valid range [maxScroll, 0]
-      const clampedTranslateX = Math.max(Math.min(targetTranslateX, 0), maxScroll);
-      
       // Map clampedTranslateX to scrollY
-      // Since maxScroll is negative, we need: progress = clampedTranslateX / maxScroll
-      // But clampedTranslateX is also negative, so progress will be positive
-      // Additional safety: Check for division by zero or invalid values
-      if (Math.abs(maxScroll) < 0.001) {
-        console.warn('Max scroll too small for division, cannot scroll');
-        return;
-      }
-      
       const progress = Math.abs(clampedTranslateX / maxScroll);
       if (isNaN(progress) || !isFinite(progress)) {
-        console.warn('Invalid progress calculation, cannot scroll. progress:', progress, 'clampedTranslateX:', clampedTranslateX, 'maxScroll:', maxScroll);
+        console.warn('Invalid progress calculation, cannot scroll.');
         return;
       }
       
@@ -386,13 +408,12 @@ export default function HomeClient({ items, categories = ['All', 'Work', 'Lab', 
         window.scrollTo({ top: clampedScrollY, behavior: 'smooth' });
       }
     } catch (error) {
-      // Catch any unexpected errors and prevent component crash
       console.error('Error in scrollToCategory:', error);
     }
   };
 
-  // Early return if no items (should not happen, but safety check)
-  if (!items || items.length === 0) {
+  // Early return if no items
+  if (!sortedItems || sortedItems.length === 0) {
     return (
       <div className="bg-stone-100 dark:bg-neutral-700 min-h-screen flex items-center justify-center">
         <div className="text-center">
@@ -416,43 +437,49 @@ export default function HomeClient({ items, categories = ['All', 'Work', 'Lab', 
         {/* Fixed Viewport Container */}
         <div className="sticky top-0 h-screen flex items-center justify-center overflow-hidden">
           <motion.div
-            className="h-[640px] w-full"
+            className="h-[640px] w-full relative"
             style={{
               scale: springScale,
               x: springX,
             }}
           >
-            {/* Horizontal Masonry Grid - Centered with dynamic padding */}
+            {/* Absolute Positioned Container */}
             <div
               ref={contentRef}
-              className="h-full inline-grid"
+              className="relative h-full"
               style={{
-                display: 'grid',
-                gridTemplateRows: 'repeat(2, 300px)',
-                gridAutoFlow: 'column',
-                gap: '1.5rem',
-                width: 'max-content',
-                paddingLeft: 'calc(50vw - 312px)',
-                paddingRight: 'calc(50vw - 312px)',
+                width: `${containerWidth}px`,
+                minWidth: `${containerWidth}px`,
               }}
             >
-              {items.map((item, index) => (
-                <MasonryCard
-                  key={item.id}
-                  id={item.id}
-                  title={item.title}
-                  year={item.year}
-                  description={item.description}
-                  image={item.image}
-                  size={item.size}
-                  type={item.type}
-                  link={item.link}
-                  scrollProgress={springX}
-                  cardIndex={index}
-                  totalCards={items.length}
-                  cardPosition={cardPositions[index]}
-                />
-              ))}
+              {sortedItems.map((item, index) => {
+                const position = cardPositions[index];
+                if (!position) return null;
+
+                return (
+                  <MasonryCard
+                    key={item.id}
+                    id={item.id}
+                    title={item.title}
+                    year={item.year}
+                    description={item.description}
+                    image={item.image}
+                    size={item.size}
+                    type={item.type}
+                    link={item.link}
+                    scrollProgress={springX}
+                    cardIndex={index}
+                    totalCards={sortedItems.length}
+                    cardPosition={position.centerX}
+                    absolutePosition={{
+                      top: position.top,
+                      left: position.left,
+                      width: position.width,
+                      height: position.height,
+                    }}
+                  />
+                );
+              })}
             </div>
           </motion.div>
         </div>
