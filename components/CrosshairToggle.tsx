@@ -29,10 +29,13 @@ export default function CrosshairToggle() {
   };
 
   return (
-    <div className="fixed inset-0 flex items-center justify-center z-[100] pointer-events-none">
+    <div 
+      className="fixed top-0 left-0 w-full flex items-center justify-center z-[9999] pointer-events-none"
+      style={{ height: '100svh' }}
+    >
       <motion.button
         onClick={toggleDarkMode}
-        className="text-white mix-blend-exclusion pointer-events-auto cursor-pointer"
+        className="text-white mix-blend-difference pointer-events-auto cursor-pointer"
         whileHover={{ scale: 1.1, rotate: 90 }}
         whileTap={{ scale: 0.95 }}
         transition={{ duration: 0.2 }}

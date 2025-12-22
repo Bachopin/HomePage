@@ -21,24 +21,43 @@ interface CardPosition {
 
 export default function HomeClient({ items, categories = ['All', 'Work', 'Lab', 'Life'] }: HomeClientProps) {
   const contentRef = useRef<HTMLDivElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
   const [activeSection, setActiveSection] = useState<string>('All');
   const [contentWidth, setContentWidth] = useState(0);
   const [windowWidth, setWindowWidth] = useState(1920); // Default width, will be updated on mount
+  const [windowHeight, setWindowHeight] = useState(1080); // Default height, will be updated on mount
+  const [baseScale, setBaseScale] = useState(1); // Dynamic scale for mobile/small screens
 
-  // Dynamic width measurement
+  // Dynamic width and height measurement with responsive scaling
   useEffect(() => {
     // Only run on client side
     if (typeof window === 'undefined') return;
 
     const handleResize = () => {
+      const width = window.innerWidth;
+      const height = window.innerHeight;
+      setWindowWidth(width);
+      setWindowHeight(height);
+      
       if (contentRef.current) {
         setContentWidth(contentRef.current.scrollWidth);
-        setWindowWidth(window.innerWidth);
+      }
+
+      // Calculate baseScale for mobile/small screens
+      // If window is small (height < 800px OR width < 800px), scale down to fit
+      if (height < 800 || width < 800) {
+        // Scale based on available height (leave 100px for UI elements)
+        const scaleByHeight = Math.min(1, (height - 100) / 700);
+        // Scale based on available width (leave 100px for margins)
+        const scaleByWidth = Math.min(1, (width - 100) / 800);
+        // Use the smaller scale to ensure content fits
+        setBaseScale(Math.min(scaleByHeight, scaleByWidth, 1));
+      } else {
+        setBaseScale(1);
       }
     };
 
-    // Set initial width
-    setWindowWidth(window.innerWidth);
+    // Set initial values
     handleResize();
     
     window.addEventListener('resize', handleResize);
@@ -51,20 +70,22 @@ export default function HomeClient({ items, categories = ['All', 'Work', 'Lab', 
     };
   }, [items.length]);
 
-  // Use native scroll from framer-motion (page scroll)
-  const { scrollY } = useScroll();
+  // Use scroll progress instead of absolute scrollY values
+  // Track window scroll progress (0 to 1) through the document
+  const { scrollYProgress } = useScroll();
 
-  // Stage 1: Scale transform - Map scrollY [0, 300] -> scale [1.15, 1]
-  const scale = useTransform(scrollY, [0, 300], [1.15, 1]);
+  // Stage 1: Scale transform - Map scrollYProgress [0, 0.1] -> scale [baseScale * 1.15, baseScale]
+  const scale = useTransform(scrollYProgress, [0, 0.1], [baseScale * 1.15, baseScale]);
   const springScale = useSpring(scale, { stiffness: 400, damping: 40 });
 
-  // Stage 2: X transform - Dynamic calculation based on content width
+  // Stage 2: X transform - Map scrollYProgress [0.1, 1.0] -> x [0, maxScroll]
   const maxScroll = contentWidth > windowWidth ? -(contentWidth - windowWidth) : 0;
   
-  const x = useTransform(scrollY, (latest) => {
-    if (latest < 300) return 0;
-    if (latest > 4000) return maxScroll;
-    const progress = (latest - 300) / (4000 - 300);
+  const x = useTransform(scrollYProgress, (latest) => {
+    if (latest < 0.1) return 0;
+    if (latest >= 1.0) return maxScroll;
+    // Map progress from 0.1 to 1.0 to translateX from 0 to maxScroll
+    const progress = (latest - 0.1) / (1.0 - 0.1); // Normalize to 0-1
     return progress * maxScroll;
   });
   const springX = useSpring(x, { stiffness: 400, damping: 40 });
@@ -134,7 +155,8 @@ export default function HomeClient({ items, categories = ['All', 'Work', 'Lab', 
     const gap = 24; // 1.5rem
     const columnWidth = 300; // Base column width
     const rowHeight = 300; // Base row height
-    const introPadding = (windowWidth && windowWidth > 0) ? windowWidth / 2 - 312 : 0;
+    // Smart padding: ensure minimum 24px margin on mobile, prevent negative values
+    const introPadding = (windowWidth && windowWidth > 0) ? Math.max(24, windowWidth / 2 - 312) : 24;
 
     // Early return if no items
     if (!sortedItems || sortedItems.length === 0) {
@@ -349,7 +371,7 @@ export default function HomeClient({ items, categories = ['All', 'Work', 'Lab', 
     }
   });
 
-  // Scroll to category function - clamp target scroll value so it doesn't exceed maxScroll
+  // Scroll to category function - uses percentage-based scrolling for responsive behavior
   const scrollToCategory = (category: string) => {
     try {
       if (category === 'All') {
@@ -392,20 +414,23 @@ export default function HomeClient({ items, categories = ['All', 'Work', 'Lab', 
         return;
       }
       
-      // Map clampedTranslateX to scrollY
-      const progress = Math.abs(clampedTranslateX / maxScroll);
-      if (isNaN(progress) || !isFinite(progress)) {
+      // Map clampedTranslateX to scroll progress (0.0 to 1.0)
+      // Horizontal scroll happens from progress 0.1 to 1.0
+      // So: progress = 0.1 + (0.9 * normalizedTranslateX)
+      const normalizedTranslateX = Math.abs(clampedTranslateX / maxScroll);
+      const targetProgress = 0.1 + (normalizedTranslateX * 0.9); // Map to [0.1, 1.0]
+      
+      if (isNaN(targetProgress) || !isFinite(targetProgress)) {
         console.warn('Invalid progress calculation, cannot scroll.');
         return;
       }
       
-      const targetScrollY = 300 + progress * (4000 - 300);
+      // Calculate target scroll position as percentage of document height
+      const documentHeight = document.body.scrollHeight;
+      const targetScrollY = documentHeight * targetProgress;
       
-      // Clamp to valid scroll range
-      const clampedScrollY = Math.min(Math.max(targetScrollY, 300), 4000);
-      
-      if (!isNaN(clampedScrollY)) {
-        window.scrollTo({ top: clampedScrollY, behavior: 'smooth' });
+      if (!isNaN(targetScrollY) && documentHeight > 0) {
+        window.scrollTo({ top: targetScrollY, behavior: 'smooth' });
       }
     } catch (error) {
       console.error('Error in scrollToCategory:', error);
@@ -433,7 +458,7 @@ export default function HomeClient({ items, categories = ['All', 'Work', 'Lab', 
       />
       
       {/* Scrollable Container - Large height for vertical scrolling */}
-      <div className="h-[400vh] no-scrollbar">
+      <div ref={containerRef} className="h-[400vh] no-scrollbar">
         {/* Fixed Viewport Container */}
         <div className="sticky top-0 h-screen flex items-center justify-center overflow-hidden">
           <motion.div
