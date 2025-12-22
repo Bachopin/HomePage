@@ -157,7 +157,6 @@ export default function HomeClient({
   // -------------------------------------------------------------------------
   const { activeSection, scrollToCategory } = useScrollSpy({
     scrollX: springX,
-    categoryStartX,
     categoryTargetX,
     categories,
     windowWidth,

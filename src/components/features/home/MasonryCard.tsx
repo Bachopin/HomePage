@@ -332,7 +332,7 @@ export default function MasonryCard({
 
   // 预加载图片并获取尺寸
   useEffect(() => {
-    if (type === 'project' && image) {
+    if (type === 'project' && image && image.trim() !== '') {
       const img = new Image();
       img.src = image;
       img.onload = () => {
@@ -342,8 +342,19 @@ export default function MasonryCard({
       img.onerror = () => {
         setImageError(true);
       };
+    } else if (type === 'project') {
+      // 没有图片的情况，直接设置为已加载
+      setImageLoaded(true);
+      setImgSize(null);
     }
   }, [image, type]);
+
+  // 判断是否有图片
+  const hasImage = image && image.trim() !== '';
+  // 判断是否应该显示占位符（只有在有图片但未加载完成时才显示）
+  const shouldShowPlaceholder = hasImage && (!imageLoaded || imageError || !imgSize);
+  // 判断是否有内容（标题或描述）
+  const hasContent = (title && title.trim() !== '') || (description && description.trim() !== '');
 
   // Grid area class (for non-absolute positioning)
   const gridAreaClass = `row-span-${cardDims.rows} col-span-${cardDims.cols}`;
@@ -399,13 +410,13 @@ export default function MasonryCard({
     >
       <CardWrapper {...wrapperProps} className="block w-full h-full">
         <div className="w-full h-full relative overflow-hidden flex items-center justify-center bg-neutral-200 dark:bg-neutral-800">
-          {/* Loading Skeleton / Error State */}
-          {(!imageLoaded || imageError || !imgSize) && (
+          {/* Loading Skeleton / Error State - 只在有图片但未加载完成时显示 */}
+          {shouldShowPlaceholder && (
             <ProjectCardPlaceholder imageError={imageError} />
           )}
 
-          {/* Image with Parallax */}
-          {imageLoaded && !imageError && imgSize && (
+          {/* Image with Parallax - 只在有图片且加载成功时显示 */}
+          {hasImage && imageLoaded && !imageError && imgSize && (
             <ProjectCardImage
               image={image}
               imgSize={imgSize}
@@ -416,16 +427,44 @@ export default function MasonryCard({
             />
           )}
 
-          {/* Gradient Overlay */}
-          {imageLoaded && !imageError && showText && (
+          {/* 无图片时的文字内容 */}
+          {!hasImage && hasContent && (
+            <div className="absolute inset-0 flex items-center justify-center">
+              <div className="text-center px-6">
+                {year && (
+                  <span className="text-xs font-mono opacity-60 text-neutral-500 dark:text-neutral-400 mb-2 block">
+                    {year}
+                  </span>
+                )}
+                {title && (
+                  <h3 className="text-lg font-medium text-neutral-700 dark:text-neutral-300 mb-2">
+                    {title}
+                  </h3>
+                )}
+                {description && (
+                  <p className="text-sm text-neutral-600 dark:text-neutral-400 line-clamp-3">
+                    {description}
+                  </p>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* 完全空白的卡片 - 无图片且无内容 */}
+          {!hasImage && !hasContent && (
+            <div className="absolute inset-0 bg-neutral-100 dark:bg-neutral-900" />
+          )}
+
+          {/* Gradient Overlay - 只在有图片且有文字时显示 */}
+          {hasImage && imageLoaded && !imageError && showText && (
             <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent z-10" />
           )}
 
           {/* Link Indicator */}
           <LinkIndicator visible={hasLink} />
 
-          {/* Text Overlay */}
-          {imageLoaded && !imageError && (
+          {/* Text Overlay - 只在有图片时显示 */}
+          {hasImage && imageLoaded && !imageError && (
             <ProjectCardTextOverlay
               title={title}
               year={year}

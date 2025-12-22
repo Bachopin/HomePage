@@ -260,8 +260,8 @@ export function useMasonryLayout({
     // 网格占用管理器
     const gridManager = new GridOccupancyManager(GRID.rows);
 
-    // 用于记录每个分类的最小 Sort 值卡片
-    const categoryMinSortCards: Record<string, { index: number; sort: number; centerX: number }> = {};
+    // 用于记录每个分类的目标卡片（Sort 值最小的卡片）
+    const categoryTargetCards: Record<string, { index: number; sort: number; position: CardPosition }> = {};
 
     // 放置每张卡片
     items.forEach((item, index) => {
@@ -292,35 +292,45 @@ export function useMasonryLayout({
       // 处理分类逻辑
       if (item.type === 'project' && item.category) {
         const category = item.category;
-        const sort = item.sort;
 
         // 记录分类起始位置（每个分类第一张卡片的左边缘）
         if (categoryStarts[category] === undefined) {
           categoryStarts[category] = position.left;
         }
 
-        // 查找每个分类中 Sort 值最低且不为空的卡片
+        // 查找每个分类中 Sort 值最小的卡片作为目标卡片
+        const sort = item.sort;
         if (sort !== undefined && sort !== null && !isNaN(sort)) {
-          if (!categoryMinSortCards[category] || sort < categoryMinSortCards[category].sort) {
-            categoryMinSortCards[category] = {
+          if (!categoryTargetCards[category] || sort < categoryTargetCards[category].sort) {
+            categoryTargetCards[category] = {
               index,
               sort,
-              centerX: position.centerX,
+              position,
             };
           }
         }
       }
     });
 
-    // 设置每个分类的目标位置（Sort 最低卡片的中心）
-    Object.keys(categoryMinSortCards).forEach(category => {
-      categoryTargets[category] = categoryMinSortCards[category].centerX;
+    // 设置每个分类的目标位置
+    Object.keys(categoryTargetCards).forEach(category => {
+      // 使用目标卡片的中心位置
+      categoryTargets[category] = categoryTargetCards[category].position.centerX;
     });
 
-    // 对于没有 Sort 值的分类，使用起始位置作为目标
+    // 对于没有 Sort 值的分类，使用第一张卡片的中心位置
     Object.keys(categoryStarts).forEach(category => {
       if (categoryTargets[category] === undefined) {
-        categoryTargets[category] = categoryStarts[category];
+        // 找到该分类的第一张卡片
+        const firstCardIndex = items.findIndex(item => 
+          item.type === 'project' && item.category === category
+        );
+        if (firstCardIndex !== -1 && positions[firstCardIndex]) {
+          categoryTargets[category] = positions[firstCardIndex].centerX;
+        } else {
+          // 兜底：使用起始位置
+          categoryTargets[category] = categoryStarts[category];
+        }
       }
     });
 

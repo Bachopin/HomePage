@@ -10,9 +10,7 @@ import { SCROLL } from '@/lib/config';
 export interface UseScrollSpyProps {
   /** 水平滚动位置（motion value，负值表示向左滚动） */
   scrollX: MotionValue<number>;
-  /** 每个分类的起始 X 坐标（用于检测激活状态） */
-  categoryStartX: Record<string, number>;
-  /** 每个分类的目标 X 坐标（用于导航跳转） */
+  /** 每个分类的目标 X 坐标（用于导航跳转和检测激活状态） */
   categoryTargetX: Record<string, number>;
   /** 分类列表（包含 'All'） */
   categories: string[];
@@ -48,7 +46,6 @@ export interface UseScrollSpyResult {
  */
 export function useScrollSpy({
   scrollX,
-  categoryStartX,
   categoryTargetX,
   categories,
   windowWidth,
@@ -78,41 +75,32 @@ export function useScrollSpy({
         return;
       }
 
-      // 滚动末尾强制显示最后一个分类
-      if (Math.abs(latest - maxScroll) < SCROLL.endThreshold) {
-        const orderedCategories = categories.filter(c => c !== 'All');
-        if (orderedCategories.length > 0) {
-          setActiveSection(orderedCategories[orderedCategories.length - 1]);
-          return;
-        }
-      }
+      // 计算屏幕中心线对应的绝对 X 坐标
+      const screenCenterX = windowWidth / 2;
+      const absoluteXAtCenter = screenCenterX - latest; // latest 是负值，所以减去它
 
-      // 计算视口中心对应的绝对 X 坐标
-      const viewportCenter = windowWidth / 2;
-      const absoluteXAtViewportCenter = viewportCenter - latest;
-
+      // 获取有效分类列表（排除 'All'）
       const orderedCategories = categories.filter(c => c !== 'All');
       if (orderedCategories.length === 0) {
         setActiveSection('All');
         return;
       }
 
-      // 简单且健壮的逻辑：
-      // 找到最后一个目标卡片左边已经越过屏幕中线的分类
+      // 找到目标卡片左边缘已经越过屏幕中心的最后一个分类
       let activeCategory = 'All';
 
-      for (let i = 0; i < orderedCategories.length; i++) {
-        const category = orderedCategories[i];
+      for (const category of orderedCategories) {
         const targetX = categoryTargetX[category];
-
+        
         if (targetX === undefined || isNaN(targetX)) {
           continue;
         }
 
-        // 如果目标卡片的左边已经越过屏幕中线，则该分类激活
-        if (absoluteXAtViewportCenter >= targetX) {
+        // 计算目标卡片的左边缘位置（中心位置减去一半宽度）
+        // 简化：直接使用目标卡片的中心位置作为判断依据
+        // 当卡片中心越过屏幕中心时，切换到该分类
+        if (absoluteXAtCenter >= targetX) {
           activeCategory = category;
-          // 继续检查下一个分类，找到最后一个满足条件的
         }
       }
 
@@ -154,14 +142,14 @@ export function useScrollSpy({
         }
 
         // 计算目标位置：将目标卡片居中
-        const viewportCenter = windowWidth / 2;
-        const targetTranslateX = viewportCenter - targetX;
+        const screenCenter = windowWidth / 2;
+        const targetTranslateX = screenCenter - targetX;
 
         // 限制在有效范围内 [maxScroll, 0]
         const clampedTranslateX = Math.max(Math.min(targetTranslateX, 0), maxScroll);
 
         // 验证 maxScroll 有效性
-        if (maxScroll === 0 || Math.abs(maxScroll) < 0.001 || isNaN(maxScroll)) {
+        if (maxScroll === 0 || Math.abs(maxScroll) < 1 || isNaN(maxScroll)) {
           console.warn('Max scroll is 0 or invalid, cannot scroll. maxScroll:', maxScroll);
           return;
         }
