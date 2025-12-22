@@ -1,8 +1,9 @@
 import { getDatabaseItems, NotionItem } from '@/lib/notion';
 import HomeClient from '@/components/HomeClient';
 
-// Force dynamic rendering - fetch on every request
-export const revalidate = 0;
+// Incremental Static Regeneration (ISR) - revalidate every hour
+// This provides periodic synchronization with Notion while serving cached pages
+export const revalidate = 3600;
 
 // Define category order for sorting (must match actual category names from Notion)
 const CATEGORY_ORDER = ['相关链接', '认知投研', '历史项目', '技术分析'];

@@ -63,11 +63,13 @@ export default function HomeClient({ items, categories = ['All', 'Work', 'Lab', 
 
   // Grid simulator: Calculate card positions in a 2-row grid layout
   // This simulates CSS grid-auto-flow: column behavior (fills columns top-to-bottom, then moves to next column)
-  const { categoryOffsets, cardPositions, cardLeftEdges, cardWidths } = useMemo(() => {
+  // Also pre-calculates categoryAnchorPositions for O(1) lookup during scroll
+  const { categoryOffsets, cardPositions, cardLeftEdges, cardWidths, categoryAnchorPositions } = useMemo(() => {
     const offsets: Record<string, number> = {};
     const positions: number[] = [];
     const leftEdges: number[] = [];
     const widths: number[] = [];
+    const anchorPositions: Record<string, number> = {}; // Map: category -> centerX of first card (lowest sort)
     const gap = 24; // 1.5rem
     const columnWidth = 300; // Base column width
     // Calculate intro padding safely (windowWidth should be set by useEffect on client)
@@ -75,7 +77,13 @@ export default function HomeClient({ items, categories = ['All', 'Work', 'Lab', 
 
     // Early return if no items
     if (!items || items.length === 0) {
-      return { categoryOffsets: offsets, cardPositions: positions, cardLeftEdges: leftEdges, cardWidths: widths };
+      return { 
+        categoryOffsets: offsets, 
+        cardPositions: positions, 
+        cardLeftEdges: leftEdges, 
+        cardWidths: widths,
+        categoryAnchorPositions: anchorPositions
+      };
     }
 
     // Grid occupancy map: 2 rows, dynamically expanding columns
@@ -175,23 +183,39 @@ export default function HomeClient({ items, categories = ['All', 'Work', 'Lab', 
       positions[index] = centerX;
       widths[index] = width;
 
-      // Track category offsets (first card of each category)
+      // Track category offsets (first card of each category) - using leftEdge
       if (item.type !== 'intro' && item.type !== 'outro' && item.category) {
         if (offsets[item.category] === undefined) {
           offsets[item.category] = leftEdge;
         }
       }
+
+      // Track category anchor positions (centerX of first card with lowest sort) - using centerX
+      // Since items are already sorted by sort value within each category,
+      // the first card we encounter for a category is the anchor card
+      if (item.type !== 'intro' && item.type !== 'outro' && item.category) {
+        if (anchorPositions[item.category] === undefined) {
+          anchorPositions[item.category] = centerX;
+        }
+      }
     });
 
-    return { categoryOffsets: offsets, cardPositions: positions, cardLeftEdges: leftEdges, cardWidths: widths };
+    return { 
+      categoryOffsets: offsets, 
+      cardPositions: positions, 
+      cardLeftEdges: leftEdges, 
+      cardWidths: widths,
+      categoryAnchorPositions: anchorPositions
+    };
   }, [items, windowWidth]);
 
   // Track active section based on card center passing through viewport center (crosshair position)
-  // Since items are sorted, the first card in each category is the one with lowest sort value
+  // Optimized: Uses pre-calculated categoryAnchorPositions for O(1) lookup instead of nested loops
   useMotionValueEvent(springX, 'change', (latest) => {
     try {
       // Safety checks: ensure we have valid data
-      if (!items || items.length === 0 || !cardPositions || cardPositions.length === 0) {
+      // Allow empty categoryAnchorPositions during initial render - just set to 'All'
+      if (!categoryAnchorPositions || Object.keys(categoryAnchorPositions).length === 0) {
         setActiveSection('All');
         return;
       }
@@ -210,7 +234,7 @@ export default function HomeClient({ items, categories = ['All', 'Work', 'Lab', 
 
       const viewportCenter = windowWidth / 2; // Crosshair position (center of viewport)
       
-      // Calculate which category's first card (lowest sort) has its center closest to viewport center
+      // O(1) lookup: Use pre-calculated categoryAnchorPositions to find closest category
       // latest is negative (content moving left), so card position = cardAbsoluteX + latest
       let activeCategory = 'All';
       let closestCategory = 'All';
@@ -223,40 +247,23 @@ export default function HomeClient({ items, categories = ['All', 'Work', 'Lab', 
         return;
       }
 
-      // For each category, find the first card (which is already sorted - lowest sort comes first)
-      orderedCategories.forEach((category) => {
+      // O(n) iteration over categories (typically 3-5 categories), not O(n*m) over items
+      for (const category of orderedCategories) {
         try {
-          let targetCardIndex = -1;
-
-          // Find the first card in this category (already sorted by sort value)
-          items.forEach((item, index) => {
-            if (!item) return;
-            if (item.type === 'intro' || item.type === 'outro') return;
-            if (!item.category) return;
-            
-            const itemCategory = item.category.trim();
-            const targetCategory = category.trim();
-            if (itemCategory !== targetCategory) return;
-
-            // Since items are already sorted, the first matching card is the one with lowest sort
-            if (targetCardIndex === -1) {
-              targetCardIndex = index;
-            }
-          });
-
-          if (targetCardIndex === -1 || targetCardIndex < 0 || targetCardIndex >= cardPositions.length) return;
-
-          const cardCenterX = cardPositions[targetCardIndex];
-          if (cardCenterX === undefined || isNaN(cardCenterX)) return;
-
-          // Calculate current card center position (accounting for scroll transform)
-          const cardCurrentCenterX = cardCenterX + latest; // latest is negative
+          const anchorCenterX = categoryAnchorPositions[category];
           
-          // Calculate distance from card center to viewport center
-          // Use absolute distance to find the closest card to center
+          // Skip if anchor position not found
+          if (anchorCenterX === undefined || isNaN(anchorCenterX)) {
+            continue;
+          }
+
+          // Calculate current anchor card center position (accounting for scroll transform)
+          const cardCurrentCenterX = anchorCenterX + latest; // latest is negative
+          
+          // Calculate distance from anchor card center to viewport center
           const distance = Math.abs(cardCurrentCenterX - viewportCenter);
           
-          // Track the category whose card center is closest to viewport center
+          // Track the category whose anchor card center is closest to viewport center
           if (distance < minDistance && !isNaN(distance)) {
             minDistance = distance;
             closestCategory = category;
@@ -265,7 +272,7 @@ export default function HomeClient({ items, categories = ['All', 'Work', 'Lab', 
           // Silently skip this category if there's an error
           console.warn('Error processing category:', category, err);
         }
-      });
+      }
 
       // Use the closest category, or 'All' if none found
       if (closestCategory !== 'All') {
@@ -275,31 +282,13 @@ export default function HomeClient({ items, categories = ['All', 'Work', 'Lab', 
         // In that case, select the last category
         try {
           const lastCategory = orderedCategories[orderedCategories.length - 1];
-          let targetCardIndex = -1;
-
-          // Find the first card in the last category (already sorted)
-          items.forEach((item, index) => {
-            if (!item) return;
-            if (item.type === 'intro' || item.type === 'outro') return;
-            if (!item.category) return;
-            
-            const itemCategory = item.category.trim();
-            if (itemCategory !== lastCategory.trim()) return;
-
-            // Since items are already sorted, the first matching card is the one with lowest sort
-            if (targetCardIndex === -1) {
-              targetCardIndex = index;
-            }
-          });
+          const lastAnchorCenterX = categoryAnchorPositions[lastCategory];
           
-          if (targetCardIndex !== -1 && targetCardIndex >= 0 && targetCardIndex < cardPositions.length) {
-            const cardCenterX = cardPositions[targetCardIndex];
-            if (cardCenterX !== undefined && !isNaN(cardCenterX)) {
-              const cardCurrentCenterX = cardCenterX + latest;
-              // If the last category's card center has passed center, select it
-              if (cardCurrentCenterX < viewportCenter && !isNaN(cardCurrentCenterX)) {
-                activeCategory = lastCategory;
-              }
+          if (lastAnchorCenterX !== undefined && !isNaN(lastAnchorCenterX)) {
+            const cardCurrentCenterX = lastAnchorCenterX + latest;
+            // If the last category's anchor card center has passed center, select it
+            if (cardCurrentCenterX < viewportCenter && !isNaN(cardCurrentCenterX)) {
+              activeCategory = lastCategory;
             }
           }
         } catch (err) {
@@ -317,7 +306,7 @@ export default function HomeClient({ items, categories = ['All', 'Work', 'Lab', 
   });
 
   // Scroll to category function - align card center to viewport center (crosshair position)
-  // Jump to the first card of the category (which is the one with lowest sort value, since items are sorted)
+  // Optimized: Uses pre-calculated categoryAnchorPositions for O(1) lookup
   const scrollToCategory = (category: string) => {
     try {
       if (category === 'All') {
@@ -326,8 +315,8 @@ export default function HomeClient({ items, categories = ['All', 'Work', 'Lab', 
       }
 
       // Safety checks
-      if (!items || items.length === 0 || !cardPositions || cardPositions.length === 0) {
-        console.warn('Cannot scroll: missing items or cardPositions');
+      if (!categoryAnchorPositions || Object.keys(categoryAnchorPositions).length === 0) {
+        console.warn('Cannot scroll: missing categoryAnchorPositions');
         return;
       }
 
@@ -336,48 +325,14 @@ export default function HomeClient({ items, categories = ['All', 'Work', 'Lab', 
         return;
       }
 
-      // Find the first card belonging to this category (anchor card with lowest sort value)
-      // Since items are already sorted by sort value, the first matching card is the target
-      let firstCardIndex = -1;
-
-      items.forEach((item, index) => {
-        if (!item) return;
-        if (item.type === 'intro' || item.type === 'outro') return;
-        if (!item.category) return;
-        
-        const itemCategory = item.category.trim();
-        const targetCategory = category.trim();
-        if (itemCategory !== targetCategory) return;
-        
-        // Since items are already sorted, the first matching card is the one with lowest sort (anchor card)
-        if (firstCardIndex === -1) {
-          firstCardIndex = index;
-        }
-      });
-
-      if (firstCardIndex === -1) {
-        // Debug: Log all available categories and items
-        const availableCategories = [...new Set(items.filter(i => i && i.type === 'project' && i.category).map(i => i.category))];
-        console.warn(`No card found for category: "${category}"`);
-        console.log('Available categories:', availableCategories);
-        console.log('All project items:', items.filter(i => i && i.type === 'project').map((item, idx) => ({
-          index: idx,
-          title: item.title,
-          category: item.category,
-          categoryTrimmed: item.category?.trim(),
-          sort: item.sort
-        })));
-        return;
-      }
-
-      if (firstCardIndex < 0 || firstCardIndex >= cardPositions.length) {
-        console.warn(`Invalid card index: ${firstCardIndex}, max: ${cardPositions.length}`);
-        return;
-      }
-
-      const firstCardCenterX = cardPositions[firstCardIndex];
+      // O(1) lookup: Get the anchor card center position for this category
+      const firstCardCenterX = categoryAnchorPositions[category.trim()];
+      
       if (firstCardCenterX === undefined || isNaN(firstCardCenterX)) {
-        console.warn(`Card center position undefined or invalid for index: ${firstCardIndex}, card:`, items[firstCardIndex]);
+        // Debug: Log all available categories
+        const availableCategories = Object.keys(categoryAnchorPositions);
+        console.warn(`No anchor position found for category: "${category}"`);
+        console.log('Available categories:', availableCategories);
         return;
       }
 
@@ -394,8 +349,10 @@ export default function HomeClient({ items, categories = ['All', 'Work', 'Lab', 
       // x maps scrollY [300, 4000] -> x [0, maxScroll]
       // Formula: x = (scrollY - 300) / (4000 - 300) * maxScroll
       // Solving for scrollY: scrollY = 300 + (x / maxScroll) * (4000 - 300)
-      if (maxScroll === 0 || Math.abs(maxScroll) === 0 || isNaN(maxScroll)) {
-        console.warn('Max scroll is 0 or invalid, cannot scroll');
+      
+      // Defensive check: Ensure maxScroll is never 0 when used as a divisor
+      if (maxScroll === 0 || Math.abs(maxScroll) < 0.001 || isNaN(maxScroll)) {
+        console.warn('Max scroll is 0 or invalid, cannot scroll. maxScroll:', maxScroll);
         return;
       }
       
@@ -408,9 +365,15 @@ export default function HomeClient({ items, categories = ['All', 'Work', 'Lab', 
       // Map clampedTranslateX to scrollY
       // Since maxScroll is negative, we need: progress = clampedTranslateX / maxScroll
       // But clampedTranslateX is also negative, so progress will be positive
+      // Additional safety: Check for division by zero or invalid values
+      if (Math.abs(maxScroll) < 0.001) {
+        console.warn('Max scroll too small for division, cannot scroll');
+        return;
+      }
+      
       const progress = Math.abs(clampedTranslateX / maxScroll);
-      if (isNaN(progress)) {
-        console.warn('Invalid progress calculation, cannot scroll');
+      if (isNaN(progress) || !isFinite(progress)) {
+        console.warn('Invalid progress calculation, cannot scroll. progress:', progress, 'clampedTranslateX:', clampedTranslateX, 'maxScroll:', maxScroll);
         return;
       }
       
