@@ -290,16 +290,22 @@ export default function MasonryCard({
       >
         {/* Image Container */}
         <div className="w-full h-full relative overflow-hidden flex items-center justify-center bg-neutral-200 dark:bg-neutral-800">
-          {/* Loading Placeholder */}
+          {/* Loading Placeholder / Text-only Card */}
           {(!imageLoaded || imageError || !imgSize) && (
             <div className="absolute inset-0 flex items-center justify-center bg-neutral-200 dark:bg-neutral-800">
-              <div className="text-center px-4">
+              <div className="text-center px-4 w-full">
                 <span className="text-xs font-mono opacity-60 text-neutral-500 dark:text-neutral-400 mb-1 block">
                   {year}
                 </span>
                 <h3 className="text-base font-medium text-neutral-700 dark:text-neutral-300">
                   {title}
                 </h3>
+                {/* Hover Only: Description (Summary) */}
+                {description && (
+                  <p className="text-xs opacity-0 group-hover:opacity-70 text-neutral-600 dark:text-neutral-400 mt-2 px-2 line-clamp-3 transition-opacity duration-300">
+                    {description}
+                  </p>
+                )}
                 {imageError && (
                   <p className="text-xs text-red-500 mt-2">Loading...</p>
                 )}
