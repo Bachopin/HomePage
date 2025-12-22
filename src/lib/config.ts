@@ -117,7 +117,8 @@ export function getLayoutConfig(windowWidth: number): LayoutConfig {
   
   if (isMobile) {
     const gap = LAYOUT_MOBILE.gap;
-    const columnWidth = (windowWidth - gap) / 2;
+    // 使用 Math.floor 取整，避免小数导致移动端滚动抖动
+    const columnWidth = Math.floor((windowWidth - gap) / 2);
     return {
       columnWidth,
       rowHeight: columnWidth,

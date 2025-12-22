@@ -7,15 +7,16 @@
  * 3. 1行高卡片：上边缘或下边缘距离横线 = 基准距离 + gap/2
  * 4. 2行高卡片：横线穿过卡片中心
  * 5. 排列顺序：Intro → Projects（按分类+Sort）→ Outro
+ * 
+ * 智能填坑算法：
+ * - 普通卡片：从第 0 列开始找空位（全局填坑）
+ * - Outro 卡片：从当前最右侧列开始找空位（受限填坑，保持队尾性质）
  */
 
 import { useMemo } from 'react';
 import type { NotionItem } from '@/lib/notion';
-import {
-  getLayoutConfig,
-  getCardPixelDimensions,
-} from '@/lib/config';
-import type { CardSize, LayoutConfig } from '@/lib/config';
+import { getLayoutConfig, getCardPixelDimensions } from '@/lib/config';
+import type { CardSize } from '@/lib/config';
 
 // ============================================================================
 // Types
@@ -43,6 +44,92 @@ export interface UseMasonryLayoutProps {
 }
 
 // ============================================================================
+// Grid Occupancy Manager - 网格占用管理器
+// ============================================================================
+
+/**
+ * 管理 2D 网格的占用状态，支持智能填坑算法
+ */
+class GridOccupancyManager {
+  // 使用 Set 存储已占用的格子，key 格式: "row,col"
+  private occupied: Set<string> = new Set();
+  // 追踪当前最大列索引
+  private _maxColumn: number = -1;
+
+  /**
+   * 获取当前最大列索引
+   */
+  get maxColumn(): number {
+    return this._maxColumn;
+  }
+
+  /**
+   * 检查指定位置是否可以放置指定尺寸的卡片
+   */
+  canPlace(startRow: number, startCol: number, rows: number, cols: number): boolean {
+    // 检查是否超出行边界（固定 2 行）
+    if (startRow < 0 || startRow + rows > 2) {
+      return false;
+    }
+    if (startCol < 0) {
+      return false;
+    }
+
+    // 检查所有需要占用的格子是否都空闲
+    for (let r = startRow; r < startRow + rows; r++) {
+      for (let c = startCol; c < startCol + cols; c++) {
+        if (this.occupied.has(`${r},${c}`)) {
+          return false;
+        }
+      }
+    }
+    return true;
+  }
+
+  /**
+   * 标记指定区域为已占用
+   */
+  markOccupied(startRow: number, startCol: number, rows: number, cols: number): void {
+    for (let r = startRow; r < startRow + rows; r++) {
+      for (let c = startCol; c < startCol + cols; c++) {
+        this.occupied.add(`${r},${c}`);
+        // 更新最大列索引
+        if (c > this._maxColumn) {
+          this._maxColumn = c;
+        }
+      }
+    }
+  }
+
+  /**
+   * 查找第一个可用位置
+   * @param rows 需要的行数
+   * @param cols 需要的列数
+   * @param startColIndex 开始搜索的列索引（用于 Outro 的受限填坑）
+   * @returns 可用位置的 { row, col }
+   */
+  findFirstAvailablePosition(
+    rows: number,
+    cols: number,
+    startColIndex: number = 0
+  ): { row: number; col: number } {
+    // 搜索范围：从 startColIndex 到 maxColumn + 1（允许扩展到新列）
+    const searchEndCol = Math.max(this._maxColumn + 1, startColIndex);
+    
+    for (let col = startColIndex; col <= searchEndCol + 1; col++) {
+      for (let row = 0; row <= 2 - rows; row++) {
+        if (this.canPlace(row, col, rows, cols)) {
+          return { row, col };
+        }
+      }
+    }
+    
+    // 如果都找不到，返回新的一列
+    return { row: 0, col: this._maxColumn + 1 };
+  }
+}
+
+// ============================================================================
 // Helper Functions
 // ============================================================================
 
@@ -62,22 +149,22 @@ function getSafeCardSize(size: string | undefined): CardSize {
  * 基于中心横线的逻辑：
  * - 2行高卡片：横线穿过中心，top = centerLineY - height/2
  * - 1行高卡片：放在上方或下方
- *   - 上方：bottom = centerLineY - gap/2，所以 top = centerLineY - gap/2 - height
- *   - 下方：top = centerLineY + gap/2
+ *   - row=0 (上方)：bottom = centerLineY - gap/2，所以 top = centerLineY - gap/2 - height
+ *   - row=1 (下方)：top = centerLineY + gap/2
  */
 function calculateCardTop(
+  gridRow: number,
   rows: number,
   height: number,
   centerLineY: number,
-  gap: number,
-  placeAbove: boolean
+  gap: number
 ): number {
   if (rows === 2) {
     // 2行高：横线穿过中心
     return centerLineY - height / 2;
   } else {
-    // 1行高：上方或下方
-    if (placeAbove) {
+    // 1行高：根据 gridRow 决定上方或下方
+    if (gridRow === 0) {
       return centerLineY - gap / 2 - height;
     } else {
       return centerLineY + gap / 2;
@@ -100,7 +187,7 @@ export function useMasonryLayout({
     // 防御：无效窗口宽度
     const safeWindowWidth = windowWidth > 0 ? windowWidth : 1920;
     const layout = getLayoutConfig(safeWindowWidth);
-    const { gap } = layout;
+    const { columnWidth, gap } = layout;
 
     // 空数据早返回
     if (!items || !Array.isArray(items) || items.length === 0) {
@@ -114,23 +201,17 @@ export function useMasonryLayout({
 
     // 计算 Intro 卡片尺寸（2x2），确定基准距离
     const introDims = getCardPixelDimensions('2x2', layout);
-    const baseDistance = introDims.height / 2; // 基准距离 = 2x2卡片边长的一半
     
     // 中心横线的 Y 坐标（相对于容器顶部）
     // 容器高度 = 2x2卡片高度（因为最大就是2行）
     const gridHeight = introDims.height;
     const centerLineY = gridHeight / 2;
 
-    // 当前 X 位置（从左到右排列）
-    let currentX = 0;
-    
     // Intro 卡片居中显示，左边距 = (屏幕宽度 - 卡片宽度) / 2
     const introPaddingLeft = (safeWindowWidth - introDims.width) / 2;
-    currentX = introPaddingLeft;
 
-    // 用于追踪上一列的占用情况，决定1行高卡片放上还是下
-    let lastColumnTopUsed = false;
-    let lastColumnBottomUsed = false;
+    // 初始化网格管理器
+    const gridManager = new GridOccupancyManager();
 
     // 记录每个分类中 Sort 最小的卡片
     const categoryBestCard: Record<string, { sort: number; left: number; centerX: number }> = {};
@@ -145,73 +226,38 @@ export function useMasonryLayout({
 
       let left: number;
       let top: number;
+      let startRow: number;
+      let startCol: number;
 
       if (item.type === 'intro') {
-        // Intro：居中于屏幕中心
+        // Intro：居中于屏幕中心，占据 grid 的 (0,0) 位置
+        startRow = 0;
+        startCol = 0;
+        gridManager.markOccupied(startRow, startCol, rows, cols);
+        
         left = introPaddingLeft;
         top = centerLineY - height / 2;
-        currentX = left + width + gap;
-        lastColumnTopUsed = true;
-        lastColumnBottomUsed = true;
       } else if (item.type === 'outro') {
-        // Outro：也是 2x2，居中
-        left = currentX;
-        top = centerLineY - height / 2;
-        // Outro 后面不需要继续了
+        // Outro：受限智能填坑 - 从当前最右侧列开始搜索
+        const searchStartCol = Math.max(0, gridManager.maxColumn);
+        const pos = gridManager.findFirstAvailablePosition(rows, cols, searchStartCol);
+        startRow = pos.row;
+        startCol = pos.col;
+        gridManager.markOccupied(startRow, startCol, rows, cols);
+        
+        // 计算像素位置
+        left = introPaddingLeft + startCol * (columnWidth + gap);
+        top = calculateCardTop(startRow, rows, height, centerLineY, gap);
       } else {
-        // Project 卡片
-        if (rows === 2) {
-          // 2行高卡片：占满整列，横线穿过中心
-          left = currentX;
-          top = calculateCardTop(rows, height, centerLineY, gap, false);
-          currentX = left + width + gap;
-          lastColumnTopUsed = true;
-          lastColumnBottomUsed = true;
-        } else {
-          // 1行高卡片：需要决定放上还是下
-          if (!lastColumnTopUsed) {
-            // 上方空闲，放上方
-            left = currentX;
-            top = calculateCardTop(rows, height, centerLineY, gap, true);
-            lastColumnTopUsed = true;
-            
-            // 如果是2列宽，下方也被占用
-            if (cols === 2) {
-              lastColumnBottomUsed = true;
-              currentX = left + width + gap;
-            }
-          } else if (!lastColumnBottomUsed) {
-            // 下方空闲，放下方
-            left = currentX;
-            top = calculateCardTop(rows, height, centerLineY, gap, false);
-            lastColumnBottomUsed = true;
-            
-            // 如果是2列宽，上方也被占用
-            if (cols === 2) {
-              lastColumnTopUsed = true;
-              currentX = left + width + gap;
-            }
-          } else {
-            // 当前列已满，移到下一列
-            currentX = currentX; // 已经在上一个卡片处理时移动了
-            left = currentX;
-            top = calculateCardTop(rows, height, centerLineY, gap, true);
-            lastColumnTopUsed = true;
-            lastColumnBottomUsed = false;
-            
-            if (cols === 2) {
-              lastColumnBottomUsed = true;
-              currentX = left + width + gap;
-            }
-          }
-          
-          // 如果上下都用了，移动到下一列
-          if (lastColumnTopUsed && lastColumnBottomUsed) {
-            currentX = left + width + gap;
-            lastColumnTopUsed = false;
-            lastColumnBottomUsed = false;
-          }
-        }
+        // Project 卡片：全局智能填坑 - 从第 0 列开始搜索
+        const pos = gridManager.findFirstAvailablePosition(rows, cols, 0);
+        startRow = pos.row;
+        startCol = pos.col;
+        gridManager.markOccupied(startRow, startCol, rows, cols);
+        
+        // 计算像素位置
+        left = introPaddingLeft + startCol * (columnWidth + gap);
+        top = calculateCardTop(startRow, rows, height, centerLineY, gap);
 
         // 记录分类目标卡片
         if (item.category && typeof item.category === 'string') {
