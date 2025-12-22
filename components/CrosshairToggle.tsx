@@ -43,8 +43,8 @@ export default function CrosshairToggle() {
           height="24"
           viewBox="0 0 24 24"
           fill="none"
-          stroke="white"
-          strokeWidth="2"
+          stroke="currentColor"
+          strokeWidth="1.5"
           strokeLinecap="round"
           strokeLinejoin="round"
         >
