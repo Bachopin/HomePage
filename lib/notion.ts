@@ -26,6 +26,121 @@ export interface NotionItem {
   validationError?: string;
 }
 
+/**
+ * Get category order from Notion database schema
+ * Returns the order of category options as defined in the database
+ * @returns Promise<string[]> Array of category names in order
+ */
+export async function getCategoryOrder(): Promise<string[]> {
+  if (!process.env.NOTION_DATABASE_ID || !process.env.NOTION_API_KEY) {
+    console.warn('[getCategoryOrder] NOTION_DATABASE_ID or NOTION_API_KEY is not set');
+    return [];
+  }
+
+  try {
+    const apiKey = process.env.NOTION_API_KEY!;
+    const databaseId = process.env.NOTION_DATABASE_ID!;
+    
+    // Use direct HTTP request to get full database structure (same approach as getDatabaseItems)
+    // This ensures we get the complete properties including select options
+    const response = await fetch(`https://api.notion.com/v1/databases/${databaseId}`, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Notion-Version': '2022-06-28',
+        'Content-Type': 'application/json',
+      },
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('[getCategoryOrder] Failed to fetch database:', response.status, errorText);
+      return [];
+    }
+
+    const database = await response.json();
+
+    // Check if database has properties
+    if (!database.properties || typeof database.properties !== 'object') {
+      console.warn('[getCategoryOrder] Database response does not contain properties');
+      console.warn('[getCategoryOrder] Database response keys:', Object.keys(database));
+      return [];
+    }
+
+    // Extract Category property options
+    const properties = database.properties as Record<string, any>;
+    
+    // Find Category property (case-insensitive search)
+    const propertyNames = Object.keys(properties);
+    const categoryKey = propertyNames.find(key => 
+      key.toLowerCase() === 'category' || 
+      key.toLowerCase() === '分类' ||
+      key.toLowerCase() === 'categories'
+    );
+    
+    if (!categoryKey) {
+      console.warn('[getCategoryOrder] Category property not found. Available properties:', propertyNames);
+      return [];
+    }
+    
+    const categoryProperty = properties[categoryKey];
+    
+    if (!categoryProperty) {
+      console.warn('[getCategoryOrder] Category property is null or undefined');
+      return [];
+    }
+    
+    if (categoryProperty.type !== 'select') {
+      console.warn(`[getCategoryOrder] Category property type is "${categoryProperty.type}", expected "select"`);
+      return [];
+    }
+
+    // Get options array from select property
+    // Notion API returns options in the order they appear in the database schema
+    const selectConfig = categoryProperty.select;
+    if (!selectConfig) {
+      console.warn('[getCategoryOrder] Select property has no select configuration');
+      return [];
+    }
+    
+    const options = selectConfig.options;
+    
+    if (!options || !Array.isArray(options) || options.length === 0) {
+      console.warn('[getCategoryOrder] No category options found in database schema');
+      return [];
+    }
+
+    // Extract names from options (order is preserved from Notion API)
+    // Each option has structure: { id: string, name: string, color: string }
+    const categoryOrder = options
+      .map((option: any) => {
+        if (typeof option === 'string') {
+          return option;
+        }
+        if (option && typeof option === 'object') {
+          // Notion API option structure: { id, name, color }
+          return option.name || option.value || option.label || null;
+        }
+        return null;
+      })
+      .filter((name): name is string => !!name && name.trim() !== '');
+
+    // Debug: Log the category order retrieved from Notion
+    if (categoryOrder.length > 0) {
+      console.log('[getCategoryOrder] ✅ Successfully retrieved category order:', categoryOrder);
+      console.log('[getCategoryOrder] Total options:', options.length);
+    } else {
+      console.warn('[getCategoryOrder] ⚠️ Retrieved empty category order. Options structure:', JSON.stringify(options.slice(0, 2), null, 2));
+    }
+
+    return categoryOrder;
+  } catch (error: any) {
+    // Handle errors gracefully - return empty array instead of crashing
+    console.error('[getCategoryOrder] Error fetching category order from Notion:', error?.message || error);
+    return [];
+  }
+}
+
 export async function getDatabaseItems(): Promise<NotionItem[]> {
   if (!process.env.NOTION_DATABASE_ID) {
     console.warn('NOTION_DATABASE_ID is not set, returning empty array');
@@ -248,18 +363,22 @@ function mapPageToItem(page: any): NotionItem {
   try {
     const props = page.properties;
 
-    // Extract title (Name property) - REQUIRED, cannot be empty or 'Untitled'
+    // Extract title (Name property) - OPTIONAL: can be empty
+    // Support multiple possible structures: title array, rich_text array
     let title = '';
     try {
-      title = props.Name?.title?.[0]?.plain_text || '';
+      // Try title array first (most common for Title/Name properties)
+      if (props.Name?.title && Array.isArray(props.Name.title) && props.Name.title.length > 0) {
+        title = props.Name.title[0]?.plain_text || '';
+      } 
+      // Fallback to rich_text array (some databases use rich_text for Name)
+      else if (props.Name?.rich_text && Array.isArray(props.Name.rich_text) && props.Name.rich_text.length > 0) {
+        title = props.Name.rich_text[0]?.plain_text || '';
+      }
+      // Title is optional, so empty title is valid - no validation error
     } catch (error) {
-      validationErrors.push('Title extraction failed');
-      isValid = false;
-    }
-
-    if (!title || title.trim() === '' || title === 'Untitled') {
-      validationErrors.push('Title is empty or "Untitled"');
-      isValid = false;
+      // Title extraction failure is not critical - title is optional
+      title = '';
     }
 
     // Extract year (Year property - can be text like "Trade | Research")
@@ -287,37 +406,38 @@ function mapPageToItem(page: any): NotionItem {
       description = '';
     }
 
-    // Extract type (Type select)
+    // Extract type (Type select) - REQUIRED: must exist
     let typeRaw = '';
     let type: 'intro' | 'project' | 'outro' = 'project';
     try {
-      typeRaw = props.Type?.select?.name?.toLowerCase() || 'project';
-      type = typeRaw === 'intro' ? 'intro' : 
-             typeRaw === 'outro' ? 'outro' : 
-             'project';
+      // Check if Type property exists
+      if (!props.Type || !props.Type.select || !props.Type.select.name) {
+        validationErrors.push('Type is missing');
+        isValid = false;
+      } else {
+        typeRaw = props.Type.select.name.toLowerCase();
+        type = typeRaw === 'intro' ? 'intro' : 
+               typeRaw === 'outro' ? 'outro' : 
+               'project';
+      }
     } catch (error) {
       validationErrors.push('Type extraction failed');
       isValid = false;
     }
 
-    // Extract image (Cover files) - REQUIRED: must be able to safely get URL
+    // Extract image (Cover files) - OPTIONAL: can be empty for text-only cards
+    // Image is not a required field according to validation rules
     let image = '';
     try {
       if (props.Cover?.files && Array.isArray(props.Cover.files) && props.Cover.files.length > 0) {
         const file = props.Cover.files[0];
         image = file.file?.url || file.external?.url || '';
-        
-        if (!image || image.trim() === '') {
-          validationErrors.push('Image URL is empty or invalid');
-          isValid = false;
-        }
-      } else {
-        validationErrors.push('Cover files array is missing or empty');
-        isValid = false;
+        // Image is optional, so we don't fail validation if it's empty
       }
+      // If no Cover files, image remains empty string - this is valid
     } catch (error) {
-      validationErrors.push('Image extraction failed');
-      isValid = false;
+      // Image extraction failure is not critical - image is optional
+      image = '';
     }
 
     // Extract link (Link URL)
@@ -329,16 +449,22 @@ function mapPageToItem(page: any): NotionItem {
       link = '#';
     }
 
-    // Extract size (Grid Size select) - REQUIRED: must match union type
+    // Extract size (Grid Size select) - REQUIRED: must exist and match union type
     let sizeRaw = '';
     let size: '1x1' | '1x2' | '2x1' | '2x2' = '1x1';
     try {
-      sizeRaw = props['Grid Size']?.select?.name?.toLowerCase() || '1x1';
-      if (['1x1', '1x2', '2x1', '2x2'].includes(sizeRaw)) {
-        size = sizeRaw as '1x1' | '1x2' | '2x1' | '2x2';
-      } else {
-        validationErrors.push(`Invalid size: ${sizeRaw}`);
+      // Check if Grid Size property exists
+      if (!props['Grid Size'] || !props['Grid Size'].select || !props['Grid Size'].select.name) {
+        validationErrors.push('Grid Size is missing');
         isValid = false;
+      } else {
+        sizeRaw = props['Grid Size'].select.name.toLowerCase();
+        if (['1x1', '1x2', '2x1', '2x2'].includes(sizeRaw)) {
+          size = sizeRaw as '1x1' | '1x2' | '2x1' | '2x2';
+        } else {
+          validationErrors.push(`Invalid size: ${sizeRaw}`);
+          isValid = false;
+        }
       }
     } catch (error) {
       validationErrors.push('Size extraction failed');
@@ -346,20 +472,22 @@ function mapPageToItem(page: any): NotionItem {
     }
 
     // Extract category (Category select) - REQUIRED only for project type
+    // Only validate category if type was successfully extracted (isValid check ensures type exists)
     let category = '';
     try {
       category = props.Category?.select?.name || '';
       
       // Category is only required for project type
       // intro and outro types can have empty category
-      if (type === 'project' && (!category || category.trim() === '')) {
+      // Only check category requirement if type is valid (not failed validation)
+      if (isValid && type === 'project' && (!category || category.trim() === '')) {
         validationErrors.push('Project requires a Category');
         isValid = false;
       }
       // For intro/outro, category is optional - no validation error
     } catch (error) {
-      // Only fail validation if it's a project type
-      if (type === 'project') {
+      // Only fail validation if it's a project type and type itself is valid
+      if (isValid && type === 'project') {
         validationErrors.push('Category extraction failed');
         isValid = false;
       }
@@ -383,7 +511,7 @@ function mapPageToItem(page: any): NotionItem {
 
     return {
       id: page.id,
-      title: title || 'Untitled', // Fallback for invalid items
+      title: title || '', // Title is optional, use empty string if not provided
       year,
       description,
       type,
@@ -400,7 +528,7 @@ function mapPageToItem(page: any): NotionItem {
     const errorMessage = `Mapping failed: ${error?.message || 'Unknown error'}`;
     return {
       id: page.id,
-      title: 'Untitled',
+      title: '', // Use empty string instead of 'Untitled'
       year: '',
       description: '',
       type: 'project',

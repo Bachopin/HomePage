@@ -1,19 +1,20 @@
-import { getDatabaseItems, NotionItem } from '@/lib/notion';
+import { getDatabaseItems, getCategoryOrder, NotionItem } from '@/lib/notion';
 import HomeClient from '@/components/HomeClient';
 import ErrorBoundary from '@/components/ErrorBoundary';
 
 // Incremental Static Regeneration (ISR) - revalidate every hour
 // This provides periodic synchronization with Notion while serving cached pages
-export const revalidate = 3600;
-
-// Define category order for sorting (must match actual category names from Notion)
-const CATEGORY_ORDER = ['相关链接', '认知投研', '历史项目', '技术分析'];
+export const revalidate = 36;
 
 export default async function Home() {
   let items: NotionItem[] = [];
   let categories: string[] = ['All'];
   
   try {
+    // Fetch category order from Notion database schema (dynamic)
+    const categoryOrder = await getCategoryOrder();
+    console.log('[Home] Retrieved categoryOrder from Notion:', categoryOrder);
+    
     // Fetch data from Notion
     const rawData = await getDatabaseItems();
     
@@ -44,16 +45,32 @@ export default async function Home() {
       .filter((cat): cat is string => !!cat);
     const uniqueProjectCategories = [...new Set(projectCategories)];
     
-    // Sort categories by CATEGORY_ORDER, then add any extras
-    const orderedCategories = CATEGORY_ORDER.filter(cat => 
-      uniqueProjectCategories.includes(cat)
-    );
-    const extraCategories = uniqueProjectCategories.filter(cat => 
-      !CATEGORY_ORDER.includes(cat)
-    );
+    // Sort categories by dynamic categoryOrder from Notion, then add any extras
+    // IMPORTANT: Use the exact order from Notion API, filtering only categories that exist in project items
+    let finalCategoryOrder: string[] = [];
     
-    // Final category order for navigation (matches card order)
-    const finalCategoryOrder = [...orderedCategories, ...extraCategories];
+    if (categoryOrder.length > 0) {
+      // Use Notion's order: filter to only include categories that exist in project items
+      const orderedCategories = categoryOrder.filter(cat => uniqueProjectCategories.includes(cat));
+      
+      // Add any categories from project items that are not in Notion's order (new categories)
+      const extraCategories = uniqueProjectCategories.filter(cat => !categoryOrder.includes(cat));
+      
+      // Final order: Notion's order first, then extras
+      finalCategoryOrder = [...orderedCategories, ...extraCategories];
+      
+      console.log('[Home] ✅ Using Notion category order');
+      console.log('[Home] Notion order:', categoryOrder);
+      console.log('[Home] Ordered categories (filtered):', orderedCategories);
+      console.log('[Home] Extra categories (not in Notion):', extraCategories);
+    } else {
+      // Fallback: use natural order from project items
+      finalCategoryOrder = uniqueProjectCategories;
+      console.warn('[Home] ⚠️ No category order from Notion, using fallback order:', finalCategoryOrder);
+    }
+    
+    console.log('[Home] Final category order:', finalCategoryOrder);
+    console.log('[Home] Unique project categories:', uniqueProjectCategories);
     
     // Sort project items by category order (group by category)
     // Within each category, strictly sort by Sort field (ascending)

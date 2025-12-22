@@ -210,8 +210,9 @@ export default function MasonryCard({
     }
   }, [image, type]);
 
-  // Check if card should show text (not "Untitled" or empty)
-  const showText = title && title !== 'Untitled';
+  // Check if card should show text (not empty)
+  // Title is optional, so we only check if it exists and is not empty
+  const showText = title && title.trim() !== '';
   const hasLink = link && link !== '#';
 
   // Intro/Outro Card - Minimalist Typography
@@ -248,12 +249,16 @@ export default function MasonryCard({
           )}
           
           <div className="w-full h-full flex flex-col justify-center items-center p-8 text-white dark:text-black">
-            <span className="text-xs font-mono opacity-60 text-white/60 dark:text-black/60 mb-4">
-              {year}
-            </span>
-            <h2 className="text-4xl md:text-5xl font-bold mb-4 text-center">
-              {title}
-            </h2>
+            {year && (
+              <span className="text-xs font-mono opacity-60 text-white/60 dark:text-black/60 mb-4">
+                {year}
+              </span>
+            )}
+            {title && (
+              <h2 className="text-4xl md:text-5xl font-bold mb-4 text-center">
+                {title}
+              </h2>
+            )}
             {description && (
               <p className="text-sm text-white/80 dark:text-black/80 text-center max-w-md whitespace-pre-wrap">
                 {description}
@@ -294,12 +299,16 @@ export default function MasonryCard({
           {(!imageLoaded || imageError || !imgSize) && (
             <div className="absolute inset-0 flex items-center justify-center bg-neutral-200 dark:bg-neutral-800">
               <div className="text-center px-4 w-full">
-                <span className="text-xs font-mono opacity-60 text-neutral-500 dark:text-neutral-400 mb-1 block">
-                  {year}
-                </span>
-                <h3 className="text-base font-medium text-neutral-700 dark:text-neutral-300">
-                  {title}
-                </h3>
+                {year && (
+                  <span className="text-xs font-mono opacity-60 text-neutral-500 dark:text-neutral-400 mb-1 block">
+                    {year}
+                  </span>
+                )}
+                {title && (
+                  <h3 className="text-base font-medium text-neutral-700 dark:text-neutral-300">
+                    {title}
+                  </h3>
+                )}
                 {/* Hover Only: Description (Summary) */}
                 {description && (
                   <p className="text-xs opacity-0 group-hover:opacity-70 text-neutral-600 dark:text-neutral-400 mt-2 px-2 line-clamp-3 transition-opacity duration-300">
@@ -360,10 +369,11 @@ export default function MasonryCard({
           )}
 
           {/* Text Overlay - Bottom Left (Hybrid Visibility) */}
-          {imageLoaded && !imageError && showText && (
+          {/* Only show text overlay if there's actual content (year or title) */}
+          {imageLoaded && !imageError && (year || title) && (
             <div className="absolute bottom-0 left-0 right-0 p-6 z-20">
               <div className="text-white">
-                {/* Always Visible: Year and Title */}
+                {/* Always Visible: Year and Title (only if they exist) */}
                 {year && (
                   <span className="text-xs font-mono opacity-70 text-white/90 mb-1 block">
                     {year}
