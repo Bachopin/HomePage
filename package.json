@@ -3,14 +3,12 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev -p 3001 -H 0.0.0.0",
-    "dev:restart": "./scripts/dev-restart.sh",
-    "dev:start": "./scripts/dev-start.sh",
-    "dev:clean": "rm -rf .next node_modules/.cache && npm cache clean --force",
-    "dev:kill": "lsof -ti:3001 | xargs kill -9 2>/dev/null || echo 'No process on port 3001'",
+    "dev": "next dev -p 3456 -H 0.0.0.0",
     "build": "next build",
-    "start": "next start",
-    "lint": "next lint"
+    "start": "next start -p 3456",
+    "lint": "next lint",
+    "restart": "sh scripts/restart.sh",
+    "quick-restart": "sh scripts/quick-restart.sh"
   },
   "dependencies": {
     "@notionhq/client": "^5.6.0",
