@@ -15,10 +15,13 @@ export default function HomeClient({ items, categories = ['All', 'Work', 'Lab', 
   const contentRef = useRef<HTMLDivElement>(null);
   const [activeSection, setActiveSection] = useState<string>('All');
   const [contentWidth, setContentWidth] = useState(0);
-  const [windowWidth, setWindowWidth] = useState(typeof window !== 'undefined' ? window.innerWidth : 1920);
+  const [windowWidth, setWindowWidth] = useState(1920); // Default width, will be updated on mount
 
   // Dynamic width measurement
   useEffect(() => {
+    // Only run on client side
+    if (typeof window === 'undefined') return;
+
     const handleResize = () => {
       if (contentRef.current) {
         setContentWidth(contentRef.current.scrollWidth);
@@ -26,7 +29,10 @@ export default function HomeClient({ items, categories = ['All', 'Work', 'Lab', 
       }
     };
 
+    // Set initial width
+    setWindowWidth(window.innerWidth);
     handleResize();
+    
     window.addEventListener('resize', handleResize);
     
     const timeoutId = setTimeout(handleResize, 100);
@@ -64,7 +70,8 @@ export default function HomeClient({ items, categories = ['All', 'Work', 'Lab', 
     const widths: number[] = [];
     const gap = 24; // 1.5rem
     const columnWidth = 300; // Base column width
-    const introPadding = windowWidth ? windowWidth / 2 - 312 : 0;
+    // Calculate intro padding safely (windowWidth should be set by useEffect on client)
+    const introPadding = (windowWidth && windowWidth > 0) ? windowWidth / 2 - 312 : 0;
 
     // Early return if no items
     if (!items || items.length === 0) {
@@ -119,6 +126,12 @@ export default function HomeClient({ items, categories = ['All', 'Work', 'Lab', 
     // - Then moves to the next column
     // - For multi-column items, they span from their start column
     items.forEach((item, index) => {
+      // Safety check: ensure item.size is valid
+      if (!item || !item.size) {
+        console.warn(`Item at index ${index} has invalid size:`, item);
+        return; // Skip invalid items
+      }
+      
       const { rows, cols, width } = getCardDimensions(item.size);
       
       // Find the first available position
@@ -176,8 +189,20 @@ export default function HomeClient({ items, categories = ['All', 'Work', 'Lab', 
   // Track active section based on card center passing through viewport center (crosshair position)
   // Since items are sorted, the first card in each category is the one with lowest sort value
   useMotionValueEvent(springX, 'change', (latest) => {
+    // Safety checks: ensure we have valid data
+    if (!items || items.length === 0 || !cardPositions || cardPositions.length === 0) {
+      setActiveSection('All');
+      return;
+    }
+
     // If at the start (springX >= 0), show 'All'
     if (latest >= 0) {
+      setActiveSection('All');
+      return;
+    }
+
+    // Ensure windowWidth is valid
+    if (!windowWidth || windowWidth <= 0) {
       setActiveSection('All');
       return;
     }
@@ -278,6 +303,17 @@ export default function HomeClient({ items, categories = ['All', 'Work', 'Lab', 
   const scrollToCategory = (category: string) => {
     if (category === 'All') {
       window.scrollTo({ top: 0, behavior: 'smooth' });
+      return;
+    }
+
+    // Safety checks
+    if (!items || items.length === 0 || !cardPositions || cardPositions.length === 0) {
+      console.warn('Cannot scroll: missing items or cardPositions');
+      return;
+    }
+
+    if (!windowWidth || windowWidth <= 0) {
+      console.warn('Cannot scroll: invalid windowWidth');
       return;
     }
 
