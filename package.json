@@ -4,6 +4,10 @@
   "private": true,
   "scripts": {
     "dev": "next dev -p 3001 -H 0.0.0.0",
+    "dev:restart": "./scripts/dev-restart.sh",
+    "dev:start": "./scripts/dev-start.sh",
+    "dev:clean": "rm -rf .next node_modules/.cache && npm cache clean --force",
+    "dev:kill": "lsof -ti:3001 | xargs kill -9 2>/dev/null || echo 'No process on port 3001'",
     "build": "next build",
     "start": "next start",
     "lint": "next lint"
