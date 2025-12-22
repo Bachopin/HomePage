@@ -42,8 +42,10 @@ export interface MasonryLayoutResult {
   cardPositions: CardPosition[];
   /** 容器总宽度 */
   containerWidth: number;
-  /** 每个分类的起始 X 坐标 */
+  /** 每个分类的起始 X 坐标（基于该分类中 Sort 最低的卡片） */
   categoryStartX: Record<string, number>;
+  /** 每个分类的目标卡片中心 X 坐标（用于导航跳转） */
+  categoryTargetX: Record<string, number>;
   /** 网格高度（两行 + 间距） */
   gridHeight: number;
 }
@@ -219,6 +221,7 @@ export function useMasonryLayout({
   return useMemo(() => {
     const positions: CardPosition[] = [];
     const categoryStarts: Record<string, number> = {};
+    const categoryTargets: Record<string, number> = {};
 
     // 获取响应式布局配置
     const layout = getLayoutConfig(windowWidth);
@@ -228,6 +231,7 @@ export function useMasonryLayout({
       return {
         cardPositions: positions,
         categoryStartX: categoryStarts,
+        categoryTargetX: categoryTargets,
         containerWidth: 0,
         gridHeight: calculateGridHeight(layout),
       };
@@ -256,6 +260,9 @@ export function useMasonryLayout({
     // 网格占用管理器
     const gridManager = new GridOccupancyManager(GRID.rows);
 
+    // 用于记录每个分类的最小 Sort 值卡片
+    const categoryMinSortCards: Record<string, { index: number; sort: number; centerX: number }> = {};
+
     // 放置每张卡片
     items.forEach((item, index) => {
       if (!item || !item.size) {
@@ -282,11 +289,38 @@ export function useMasonryLayout({
 
       positions[index] = position;
 
-      // 记录分类起始位置（每个分类第一张卡片的左边缘）
+      // 处理分类逻辑
       if (item.type === 'project' && item.category) {
-        if (categoryStarts[item.category] === undefined) {
-          categoryStarts[item.category] = position.left;
+        const category = item.category;
+        const sort = item.sort;
+
+        // 记录分类起始位置（每个分类第一张卡片的左边缘）
+        if (categoryStarts[category] === undefined) {
+          categoryStarts[category] = position.left;
         }
+
+        // 查找每个分类中 Sort 值最低且不为空的卡片
+        if (sort !== undefined && sort !== null && !isNaN(sort)) {
+          if (!categoryMinSortCards[category] || sort < categoryMinSortCards[category].sort) {
+            categoryMinSortCards[category] = {
+              index,
+              sort,
+              centerX: position.centerX,
+            };
+          }
+        }
+      }
+    });
+
+    // 设置每个分类的目标位置（Sort 最低卡片的中心）
+    Object.keys(categoryMinSortCards).forEach(category => {
+      categoryTargets[category] = categoryMinSortCards[category].centerX;
+    });
+
+    // 对于没有 Sort 值的分类，使用起始位置作为目标
+    Object.keys(categoryStarts).forEach(category => {
+      if (categoryTargets[category] === undefined) {
+        categoryTargets[category] = categoryStarts[category];
       }
     });
 
@@ -297,6 +331,7 @@ export function useMasonryLayout({
     return {
       cardPositions: positions,
       categoryStartX: categoryStarts,
+      categoryTargetX: categoryTargets,
       containerWidth,
       gridHeight,
     };

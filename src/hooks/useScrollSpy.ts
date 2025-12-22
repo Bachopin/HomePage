@@ -10,8 +10,10 @@ import { SCROLL } from '@/lib/config';
 export interface UseScrollSpyProps {
   /** 水平滚动位置（motion value，负值表示向左滚动） */
   scrollX: MotionValue<number>;
-  /** 每个分类的起始 X 坐标 */
+  /** 每个分类的起始 X 坐标（用于检测激活状态） */
   categoryStartX: Record<string, number>;
+  /** 每个分类的目标 X 坐标（用于导航跳转） */
+  categoryTargetX: Record<string, number>;
   /** 分类列表（包含 'All'） */
   categories: string[];
   /** 视口宽度 */
@@ -40,13 +42,14 @@ export interface UseScrollSpyResult {
  * 2. 提供滚动到指定分类的函数
  * 
  * 算法说明：
- * - 使用范围判断而非中心点判断
- * - 当前分类 = categoryStartX <= viewportCenterX < nextCategoryStartX
- * - 滚动末尾强制显示最后一个分类
+ * - 基于每个分类中 Sort 值最低且不为空的卡片位置进行检测
+ * - 当该卡片的左边经过屏幕中线时，切换到对应分类
+ * - 点击导航时，跳转到该卡片居中的位置
  */
 export function useScrollSpy({
   scrollX,
   categoryStartX,
+  categoryTargetX,
   categories,
   windowWidth,
   maxScroll,
@@ -58,7 +61,7 @@ export function useScrollSpy({
   useMotionValueEvent(scrollX, 'change', (latest) => {
     try {
       // 无分类数据时默认 'All'
-      if (!categoryStartX || Object.keys(categoryStartX).length === 0) {
+      if (!categoryTargetX || Object.keys(categoryTargetX).length === 0) {
         setActiveSection('All');
         return;
       }
@@ -94,41 +97,22 @@ export function useScrollSpy({
         return;
       }
 
-      // 范围判断：找到当前激活的分类
+      // 简单且健壮的逻辑：
+      // 找到最后一个目标卡片左边已经越过屏幕中线的分类
       let activeCategory = 'All';
 
       for (let i = 0; i < orderedCategories.length; i++) {
         const category = orderedCategories[i];
-        const categoryStart = categoryStartX[category];
+        const targetX = categoryTargetX[category];
 
-        if (categoryStart === undefined || isNaN(categoryStart)) {
+        if (targetX === undefined || isNaN(targetX)) {
           continue;
         }
 
-        if (i === orderedCategories.length - 1) {
-          // 最后一个分类：absoluteX >= categoryStart 即激活
-          if (absoluteXAtViewportCenter >= categoryStart) {
-            activeCategory = category;
-            break;
-          }
-        } else {
-          // 非最后分类：检查是否在当前分类范围内
-          const nextCategory = orderedCategories[i + 1];
-          const nextCategoryStart = categoryStartX[nextCategory];
-
-          if (nextCategoryStart !== undefined && !isNaN(nextCategoryStart)) {
-            if (
-              absoluteXAtViewportCenter >= categoryStart &&
-              absoluteXAtViewportCenter < nextCategoryStart
-            ) {
-              activeCategory = category;
-              break;
-            }
-          } else {
-            if (absoluteXAtViewportCenter >= categoryStart) {
-              activeCategory = category;
-            }
-          }
+        // 如果目标卡片的左边已经越过屏幕中线，则该分类激活
+        if (absoluteXAtViewportCenter >= targetX) {
+          activeCategory = category;
+          // 继续检查下一个分类，找到最后一个满足条件的
         }
       }
 
@@ -152,8 +136,8 @@ export function useScrollSpy({
         }
 
         // 验证数据有效性
-        if (!categoryStartX || Object.keys(categoryStartX).length === 0) {
-          console.warn('Cannot scroll: missing categoryStartX');
+        if (!categoryTargetX || Object.keys(categoryTargetX).length === 0) {
+          console.warn('Cannot scroll: missing categoryTargetX');
           return;
         }
 
@@ -162,16 +146,16 @@ export function useScrollSpy({
           return;
         }
 
-        const categoryStart = categoryStartX[category.trim()];
+        const targetX = categoryTargetX[category.trim()];
 
-        if (categoryStart === undefined || isNaN(categoryStart)) {
-          console.warn(`No start position found for category: "${category}"`);
+        if (targetX === undefined || isNaN(targetX)) {
+          console.warn(`No target position found for category: "${category}"`);
           return;
         }
 
-        // 计算目标位置：将分类起始位置对齐到视口中心
+        // 计算目标位置：将目标卡片居中
         const viewportCenter = windowWidth / 2;
-        const targetTranslateX = viewportCenter - categoryStart;
+        const targetTranslateX = viewportCenter - targetX;
 
         // 限制在有效范围内 [maxScroll, 0]
         const clampedTranslateX = Math.max(Math.min(targetTranslateX, 0), maxScroll);
@@ -212,7 +196,7 @@ export function useScrollSpy({
         console.error('Error in scrollToCategory:', error);
       }
     },
-    [categoryStartX, windowWidth, maxScroll, scrollContainerRef]
+    [categoryTargetX, windowWidth, maxScroll, scrollContainerRef]
   );
 
   return { activeSection, scrollToCategory };
