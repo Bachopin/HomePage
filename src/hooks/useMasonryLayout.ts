@@ -247,7 +247,8 @@ export function useMasonryLayout({
         
         // 计算像素位置
         left = introPaddingLeft + startCol * (columnWidth + gap);
-        top = calculateCardTop(startRow, rows, height, centerLineY, gap);
+        // Outro 强制垂直居中，和 Intro 一样
+        top = centerLineY - height / 2;
       } else {
         // Project 卡片：全局智能填坑 - 从第 0 列开始搜索
         const pos = gridManager.findFirstAvailablePosition(rows, cols, 0);

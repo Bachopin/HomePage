@@ -35,7 +35,7 @@ export default function CrosshairToggle() {
     >
       <motion.button
         onClick={toggleDarkMode}
-        className="text-white mix-blend-difference pointer-events-auto cursor-pointer"
+        className="text-black dark:text-white pointer-events-auto cursor-pointer"
         whileHover={{ scale: 1.1, rotate: 90 }}
         whileTap={{ scale: 0.95 }}
         transition={{ duration: 0.2 }}

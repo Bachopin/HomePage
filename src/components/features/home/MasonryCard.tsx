@@ -418,19 +418,22 @@ export default function MasonryCard({
       }
     : { width: widthStyle };
 
+  // 完全空白的卡片（无图片且无内容）应该透明
+  const isEmptyPlaceholder = !hasImage && !hasContent;
+
   return (
     <motion.div
-      className={`group relative overflow-hidden bg-neutral-200 dark:bg-neutral-800 ${hasLink ? 'cursor-pointer' : 'cursor-default'} ${absolutePosition ? '' : gridAreaClass}`}
+      className={`group relative overflow-hidden ${isEmptyPlaceholder ? 'bg-transparent' : 'bg-neutral-200 dark:bg-neutral-800'} ${hasLink ? 'cursor-pointer' : 'cursor-default'} ${absolutePosition ? '' : gridAreaClass}`}
       style={{
         ...positionStyle,
-        borderRadius: UI.cardBorderRadius,
+        borderRadius: isEmptyPlaceholder ? 0 : UI.cardBorderRadius,
         opacity: cardOpacity,
       }}
-      whileHover={{ scale: ANIMATION.cardHoverScale }}
+      whileHover={isEmptyPlaceholder ? undefined : { scale: ANIMATION.cardHoverScale }}
       transition={{ duration: ANIMATION.hoverDuration }}
     >
       <CardWrapper {...wrapperProps} className="block w-full h-full">
-        <div className="w-full h-full relative overflow-hidden flex items-center justify-center bg-neutral-200 dark:bg-neutral-800">
+        <div className={`w-full h-full relative overflow-hidden flex items-center justify-center ${isEmptyPlaceholder ? 'bg-transparent' : 'bg-neutral-200 dark:bg-neutral-800'}`}>
           {/* Loading Skeleton / Error State - 只在有图片但未加载完成时显示 */}
           {shouldShowPlaceholder && (
             <ProjectCardPlaceholder imageError={imageError} />
@@ -471,10 +474,8 @@ export default function MasonryCard({
             </div>
           )}
 
-          {/* 完全空白的卡片 - 无图片且无内容 */}
-          {!hasImage && !hasContent && (
-            <div className="absolute inset-0 bg-neutral-100 dark:bg-neutral-900" />
-          )}
+          {/* 完全空白的卡片 - 透明占位，不显示任何内容 */}
+          {isEmptyPlaceholder && null}
 
           {/* Gradient Overlay - 只在有图片且有文字时显示 */}
           {hasImage && imageLoaded && !imageError && showText && (

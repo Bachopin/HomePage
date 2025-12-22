@@ -138,7 +138,8 @@ export default function HomeClient({
     }
     return maxScroll;
   });
-  const springX = useSpring(x, { stiffness: 400, damping: 40 });
+  // 使用更硬的弹簧，减少 Outro 缩放时的位置延迟
+  const springX = useSpring(x, { stiffness: 800, damping: 50 });
 
   // 内容透明度
   const contentOpacity = useTransform(scrollYProgress, (p): number => {
@@ -272,7 +273,7 @@ export default function HomeClient({
   return (
     <main
       ref={scrollContainerRef}
-      className="h-[100dvh] w-full overflow-y-auto overflow-x-hidden bg-stone-100 dark:bg-neutral-700 no-scrollbar"
+      className="h-[100dvh] w-full overflow-y-auto overflow-x-hidden bg-stone-100 dark:bg-neutral-700 no-scrollbar overscroll-none"
     >
       <Navigation
         activeSection={activeSection}
@@ -281,7 +282,7 @@ export default function HomeClient({
       />
 
       <div className="h-[500vh] no-scrollbar">
-        <div className="sticky top-0 h-screen flex items-center justify-center overflow-hidden">
+        <div className="sticky top-0 h-[100dvh] flex items-center justify-center overflow-hidden">
           <motion.div
             className="w-full relative"
             style={{
