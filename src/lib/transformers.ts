@@ -98,12 +98,6 @@ function computeFinalCategoryOrder(
 
   const finalOrder = [...orderedCategories, ...extraCategories];
 
-  console.log('[transformers] ✅ Using Notion category order');
-  console.log('[transformers] Notion order:', categoryOrder);
-  console.log('[transformers] Ordered categories (filtered):', orderedCategories);
-  console.log('[transformers] Extra categories (not in Notion):', extraCategories);
-  console.log('[transformers] Final category order:', finalOrder);
-
   return finalOrder;
 }
 

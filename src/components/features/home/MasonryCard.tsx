@@ -204,43 +204,52 @@ function ProjectCardImage({
 }
 
 // ============================================================================
-// Project Card Placeholder
+// Project Card Skeleton (Shimmer Effect)
+// ============================================================================
+
+function ProjectCardSkeleton() {
+  return (
+    <div className="absolute inset-0 bg-neutral-200 dark:bg-neutral-800">
+      {/* Shimmer overlay */}
+      <div className="absolute inset-0 animate-pulse">
+        {/* Main skeleton area */}
+        <div className="w-full h-full bg-gradient-to-r from-neutral-200 via-neutral-300 to-neutral-200 dark:from-neutral-800 dark:via-neutral-700 dark:to-neutral-800 bg-[length:200%_100%] animate-shimmer" />
+      </div>
+      
+      {/* Bottom text skeleton */}
+      <div className="absolute bottom-0 left-0 right-0 p-6">
+        <div className="space-y-2">
+          {/* Year skeleton */}
+          <div className="h-3 w-16 bg-neutral-300 dark:bg-neutral-700 rounded animate-pulse" />
+          {/* Title skeleton */}
+          <div className="h-5 w-32 bg-neutral-300 dark:bg-neutral-700 rounded animate-pulse" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================================
+// Project Card Placeholder (Error State)
 // ============================================================================
 
 interface ProjectCardPlaceholderProps {
-  title: string;
-  year: string;
-  description?: string;
   imageError: boolean;
 }
 
 function ProjectCardPlaceholder({
-  title,
-  year,
-  description,
   imageError,
 }: ProjectCardPlaceholderProps) {
+  // Show skeleton while loading, error state if failed
+  if (!imageError) {
+    return <ProjectCardSkeleton />;
+  }
+
+  // Error state - show minimal error indicator
   return (
     <div className="absolute inset-0 flex items-center justify-center bg-neutral-200 dark:bg-neutral-800">
-      <div className="text-center px-4 w-full">
-        {year && (
-          <span className="text-xs font-mono opacity-60 text-neutral-500 dark:text-neutral-400 mb-1 block">
-            {year}
-          </span>
-        )}
-        {title && (
-          <h3 className="text-base font-medium text-neutral-700 dark:text-neutral-300">
-            {title}
-          </h3>
-        )}
-        {description && (
-          <p className="text-xs opacity-0 group-hover:opacity-70 text-neutral-600 dark:text-neutral-400 mt-2 px-2 line-clamp-3 transition-opacity duration-300">
-            {description}
-          </p>
-        )}
-        {imageError && (
-          <p className="text-xs text-red-500 mt-2">Loading...</p>
-        )}
+      <div className="w-8 h-8 rounded-full bg-neutral-300 dark:bg-neutral-700 flex items-center justify-center">
+        <span className="text-neutral-500 dark:text-neutral-400 text-xs">!</span>
       </div>
     </div>
   );
@@ -331,7 +340,6 @@ export default function MasonryCard({
         setImgSize({ w: img.naturalWidth, h: img.naturalHeight });
       };
       img.onerror = () => {
-        console.error('Failed to load image:', image);
         setImageError(true);
       };
     }
@@ -391,14 +399,9 @@ export default function MasonryCard({
     >
       <CardWrapper {...wrapperProps} className="block w-full h-full">
         <div className="w-full h-full relative overflow-hidden flex items-center justify-center bg-neutral-200 dark:bg-neutral-800">
-          {/* Loading Placeholder */}
+          {/* Loading Skeleton / Error State */}
           {(!imageLoaded || imageError || !imgSize) && (
-            <ProjectCardPlaceholder
-              title={title}
-              year={year}
-              description={description}
-              imageError={imageError}
-            />
+            <ProjectCardPlaceholder imageError={imageError} />
           )}
 
           {/* Image with Parallax */}

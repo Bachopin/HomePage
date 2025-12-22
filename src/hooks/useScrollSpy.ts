@@ -165,9 +165,7 @@ export function useScrollSpy({
         const categoryStart = categoryStartX[category.trim()];
 
         if (categoryStart === undefined || isNaN(categoryStart)) {
-          const availableCategories = Object.keys(categoryStartX);
           console.warn(`No start position found for category: "${category}"`);
-          console.log('Available categories:', availableCategories);
           return;
         }
 

@@ -49,8 +49,6 @@ export default async function Home() {
       getCategoryOrder(),
     ]);
 
-    console.log('[Home] Retrieved categoryOrder from Notion:', categoryOrder);
-
     // 2. Transform data (filtering, sorting, sandwich order)
     const { items, categories } = processHomePageItems({ rawData, categoryOrder });
 

@@ -15,9 +15,11 @@
 ```
 src/
 ├── app/                          # Next.js App Router
-│   ├── globals.css               # 全局样式
+│   ├── globals.css               # 全局样式（含 shimmer 动画）
 │   ├── layout.tsx                # 根布局
-│   └── page.tsx                  # 首页（SSR + ISR + SEO）
+│   ├── page.tsx                  # 首页（SSR + ISR + SEO）
+│   ├── not-found.tsx             # 404 页面
+│   └── error.tsx                 # 全局错误边界
 ├── components/
 │   ├── ui/                       # 通用基础组件
 │   │   ├── index.ts              # 桶文件导出
@@ -32,7 +34,7 @@ src/
 │   └── features/home/            # 首页业务组件
 │       ├── index.ts              # 桶文件导出
 │       ├── HomeClient.tsx        # 首页客户端组件（指挥官）
-│       └── MasonryCard.tsx       # 瀑布流卡片
+│       └── MasonryCard.tsx       # 瀑布流卡片（含骨架屏）
 ├── hooks/                        # 自定义 Hooks
 │   ├── index.ts                  # 桶文件导出
 │   ├── useMasonryLayout.ts       # 瀑布流布局计算
@@ -64,7 +66,7 @@ src/
 | 组件 | 职责 |
 |------|------|
 | `HomeClient` | 数据流转、Hook 调用、布局编排 |
-| `MasonryCard` | 纯 UI 渲染，无数学计算 |
+| `MasonryCard` | 纯 UI 渲染，含骨架屏加载状态 |
 | `useParallax` | 视差物理引擎，几何计算 |
 | `useMasonryLayout` | 瀑布流布局算法 |
 | `useScrollSpy` | 滚动位置监听与导航 |
@@ -134,13 +136,16 @@ npm start
 
 - **水平滚动瀑布流** - 两行网格布局，支持多种卡片尺寸
 - **智能视差效果** - 根据图片和卡片宽高比自动计算视差方向
+- **骨架屏加载** - Shimmer 动画效果，优雅的加载体验
 - **响应式设计** - 桌面端固定列宽，移动端自适应
 - **暗色模式** - 支持系统偏好和手动切换
 - **ISR 增量更新** - 每 36 秒重新验证数据
 - **三明治结构** - intro → projects → outro 的内容组织
 - **完整 SEO** - OpenGraph、Twitter Cards、结构化元数据
+- **系统级页面** - 自定义 404 和全局错误边界
 - **类型安全** - 严格 TypeScript 类型定义
 - **零魔术数字** - 所有常量集中配置
+- **生产就绪** - 无调试日志残留
 
 ## License
 

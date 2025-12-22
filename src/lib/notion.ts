@@ -125,14 +125,6 @@ export async function getCategoryOrder(): Promise<string[]> {
       })
       .filter((name): name is string => !!name && name.trim() !== '');
 
-    // Debug: Log the category order retrieved from Notion
-    if (categoryOrder.length > 0) {
-      console.log('[getCategoryOrder] ✅ Successfully retrieved category order:', categoryOrder);
-      console.log('[getCategoryOrder] Total options:', options.length);
-    } else {
-      console.warn('[getCategoryOrder] ⚠️ Retrieved empty category order. Options structure:', JSON.stringify(options.slice(0, 2), null, 2));
-    }
-
     return categoryOrder;
   } catch (error: any) {
     // Handle errors gracefully - return empty array instead of crashing
