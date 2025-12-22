@@ -23,10 +23,9 @@ export default function HomeClient({ items, categories = ['All', 'Work', 'Lab', 
   const contentRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLElement>(null); // Scroll container ref for container-based scrolling
   const [activeSection, setActiveSection] = useState<string>('All');
-  const [contentWidth, setContentWidth] = useState(0);
   const [windowWidth, setWindowWidth] = useState(1920); // Default width, will be updated on mount
   const [windowHeight, setWindowHeight] = useState(1080); // Default height, will be updated on mount
-  const [baseScale, setBaseScale] = useState(1); // Dynamic scale for mobile/small screens
+  const [baseScale, setBaseScale] = useState(1); // Base scale (kept at 1 to avoid width conflicts on mobile)
 
   // Dynamic width and height measurement with responsive scaling
   useEffect(() => {
@@ -38,23 +37,8 @@ export default function HomeClient({ items, categories = ['All', 'Work', 'Lab', 
       const height = window.innerHeight;
       setWindowWidth(width);
       setWindowHeight(height);
-      
-      if (contentRef.current) {
-        setContentWidth(contentRef.current.scrollWidth);
-      }
-
-      // Calculate baseScale for mobile/small screens
-      // If window is small (height < 800px OR width < 800px), scale down to fit
-      if (height < 800 || width < 800) {
-        // Scale based on available height (leave 100px for UI elements)
-        const scaleByHeight = Math.min(1, (height - 100) / 700);
-        // Scale based on available width (leave 100px for margins)
-        const scaleByWidth = Math.min(1, (width - 100) / 800);
-        // Use the smaller scale to ensure content fits
-        setBaseScale(Math.min(scaleByHeight, scaleByWidth, 1));
-      } else {
-        setBaseScale(1);
-      }
+      // Keep baseScale at 1 to allow full-width mobile cards without shrinking
+      setBaseScale(1);
     };
 
     // Set initial values
@@ -76,21 +60,9 @@ export default function HomeClient({ items, categories = ['All', 'Work', 'Lab', 
     container: scrollContainerRef,
   });
 
-  // Stage 1: Scale transform - Map scrollYProgress [0, 0.1] -> scale [baseScale * 1.15, baseScale]
-  const scale = useTransform(scrollYProgress, [0, 0.1], [baseScale * 1.15, baseScale]);
+  // Stage 1: Scale transform - Map scrollYProgress [0, 0.05] -> scale [baseScale * 1.15, baseScale]
+  const scale = useTransform(scrollYProgress, [0, 0.05], [baseScale * 1.15, baseScale]);
   const springScale = useSpring(scale, { stiffness: 400, damping: 40 });
-
-  // Stage 2: X transform - Map scrollYProgress [0.1, 1.0] -> x [0, maxScroll]
-  const maxScroll = contentWidth > windowWidth ? -(contentWidth - windowWidth) : 0;
-  
-  const x = useTransform(scrollYProgress, (latest) => {
-    if (latest < 0.1) return 0;
-    if (latest >= 1.0) return maxScroll;
-    // Map progress from 0.1 to 1.0 to translateX from 0 to maxScroll
-    const progress = (latest - 0.1) / (1.0 - 0.1); // Normalize to 0-1
-    return progress * maxScroll;
-  });
-  const springX = useSpring(x, { stiffness: 400, damping: 40 });
 
   // Task 1: Sort Items (Critical)
   // Sort logic: Map each item's category to the index in the categories prop
@@ -149,16 +121,19 @@ export default function HomeClient({ items, categories = ['All', 'Work', 'Lab', 
     });
   }, [items, categories]);
 
-  // Task 2: Switch to Absolute Positioning
+  // Task 2: Switch to Absolute Positioning with Mobile-Responsive Layout
   // Grid simulator: Calculate absolute positions (top, left, width, height) for EVERY item
   const { cardPositions, categoryStartX, containerWidth } = useMemo(() => {
     const positions: CardPosition[] = [];
     const categoryStarts: Record<string, number> = {};
     const gap = 24; // 1.5rem
-    const columnWidth = 300; // Base column width
-    const rowHeight = 300; // Base row height
-    // Smart padding: ensure minimum 24px margin on mobile, prevent negative values
-    const introPadding = (windowWidth && windowWidth > 0) ? Math.max(24, windowWidth / 2 - 312) : 24;
+    
+    // Determine layout mode
+    const isMobile = windowWidth < 640;
+    
+    // Responsive column width: mobile uses full width minus padding, desktop uses fixed 300px
+    const columnWidth = isMobile ? Math.max(windowWidth - 48, 200) : 300;
+    const rowHeight = isMobile ? columnWidth : 300; // On mobile, maintain square aspect ratio
 
     // Early return if no items
     if (!sortedItems || sortedItems.length === 0) {
@@ -169,24 +144,51 @@ export default function HomeClient({ items, categories = ['All', 'Work', 'Lab', 
       };
     }
 
-    // Grid occupancy map: 2 rows, dynamically expanding columns
-    const occupied: boolean[][] = [[], []]; // [row0, row1]
-    let maxColumn = -1;
-
     // Helper function to get card dimensions in grid units
     const getCardDimensions = (size: string): { rows: number; cols: number; width: number; height: number } => {
-      switch (size) {
-        case '1x1': return { rows: 1, cols: 1, width: columnWidth, height: rowHeight };
-        case '1x2': return { rows: 2, cols: 1, width: columnWidth, height: rowHeight * 2 + gap };
-        case '2x1': return { rows: 1, cols: 2, width: columnWidth * 2 + gap, height: rowHeight };
-        case '2x2': return { rows: 2, cols: 2, width: columnWidth * 2 + gap, height: rowHeight * 2 + gap };
-        default: return { rows: 1, cols: 1, width: columnWidth, height: rowHeight };
+      if (isMobile) {
+        // Mobile: Force single column, scale heights proportionally
+        const baseHeight = columnWidth; // 1x1 base
+        switch (size) {
+          case '1x1': return { rows: 1, cols: 1, width: columnWidth, height: baseHeight };
+          case '1x2': return { rows: 1, cols: 1, width: columnWidth, height: baseHeight * 2 + gap };
+          case '2x1': return { rows: 1, cols: 1, width: columnWidth, height: baseHeight / 2 };
+          case '2x2': return { rows: 1, cols: 1, width: columnWidth, height: baseHeight * 2 + gap };
+          default: return { rows: 1, cols: 1, width: columnWidth, height: baseHeight };
+        }
+      } else {
+        // Desktop: Standard grid logic
+        switch (size) {
+          case '1x1': return { rows: 1, cols: 1, width: columnWidth, height: rowHeight };
+          case '1x2': return { rows: 2, cols: 1, width: columnWidth, height: rowHeight * 2 + gap };
+          case '2x1': return { rows: 1, cols: 2, width: columnWidth * 2 + gap, height: rowHeight };
+          case '2x2': return { rows: 2, cols: 2, width: columnWidth * 2 + gap, height: rowHeight * 2 + gap };
+          default: return { rows: 1, cols: 1, width: columnWidth, height: rowHeight };
+        }
       }
     };
 
+    // Determine first and last item widths for asymmetric padding
+    const firstItem = sortedItems[0];
+    const lastItem = sortedItems[sortedItems.length - 1];
+    const firstDims = firstItem ? getCardDimensions(firstItem.size || '1x1') : { width: columnWidth };
+    const lastDims = lastItem ? getCardDimensions(lastItem.size || '1x1') : { width: columnWidth };
+
+    // Asymmetric padding for perfect centering of first/last cards
+    const paddingLeft = Math.max(24, (windowWidth - (firstDims as any).width) / 2);
+    const paddingRight = Math.max(24, (windowWidth - (lastDims as any).width) / 2);
+
+    // Grid occupancy map: 2 rows for desktop, 1 row for mobile
+    const maxRows = isMobile ? 1 : 2;
+    const occupied: boolean[][] = [];
+    for (let i = 0; i < maxRows; i++) {
+      occupied.push([]);
+    }
+    let maxColumn = -1;
+
     // Helper function to check if a position can fit a card
     const canFit = (startRow: number, startCol: number, rows: number, cols: number): boolean => {
-      if (startRow + rows > 2) return false;
+      if (startRow + rows > maxRows) return false;
       
       for (let r = startRow; r < startRow + rows; r++) {
         for (let c = startCol; c < startCol + cols; c++) {
@@ -215,7 +217,12 @@ export default function HomeClient({ items, categories = ['All', 'Work', 'Lab', 
         return;
       }
       
-      const { rows, cols, width, height } = getCardDimensions(item.size);
+      // For mobile, force cols = 1
+      const dims = getCardDimensions(item.size);
+      const rows = dims.rows;
+      const cols = isMobile ? 1 : dims.cols;
+      const width = isMobile ? columnWidth : dims.width;
+      const height = dims.height;
       
       // Find the first available position
       let placed = false;
@@ -223,7 +230,7 @@ export default function HomeClient({ items, categories = ['All', 'Work', 'Lab', 
       let startCol = 0;
 
       for (let col = 0; col <= Math.max(maxColumn + 1, 0); col++) {
-        for (let row = 0; row <= 2 - rows; row++) {
+        for (let row = 0; row <= maxRows - rows; row++) {
           if (canFit(row, col, rows, cols)) {
             startRow = row;
             startCol = col;
@@ -243,9 +250,10 @@ export default function HomeClient({ items, categories = ['All', 'Work', 'Lab', 
       markOccupied(startRow, startCol, rows, cols);
 
       // Calculate absolute positions
-      const left = introPadding + startCol * (columnWidth + gap);
+      const left = paddingLeft + startCol * (columnWidth + gap);
       const top = startRow * (rowHeight + gap);
       const centerX = left + width / 2;
+      const right = left + width; // Right edge for container width calculation
 
       positions[index] = {
         top,
@@ -263,8 +271,17 @@ export default function HomeClient({ items, categories = ['All', 'Work', 'Lab', 
       }
     });
 
-    // Calculate container width
-    const finalWidth = introPadding * 2 + (maxColumn + 1) * (columnWidth + gap) - gap;
+    // Calculate container width: Find rightmost edge of last card + paddingRight
+    let maxContentRightEdge = 0;
+    positions.forEach((pos) => {
+      const rightEdge = pos.left + pos.width;
+      if (rightEdge > maxContentRightEdge) {
+        maxContentRightEdge = rightEdge;
+      }
+    });
+    
+    // Container width = rightmost content edge + right padding
+    const finalWidth = maxContentRightEdge + paddingRight;
 
     return {
       cardPositions: positions,
@@ -273,12 +290,18 @@ export default function HomeClient({ items, categories = ['All', 'Work', 'Lab', 
     };
   }, [sortedItems, windowWidth]);
 
-  // Update contentWidth when containerWidth changes
-  useEffect(() => {
-    if (containerWidth > 0) {
-      setContentWidth(containerWidth);
-    }
-  }, [containerWidth]);
+  // Stage 2: X transform - Map scrollYProgress [0.05, 1.0] -> x [0, maxScroll]
+  // maxScroll calculated based on containerWidth: ensures last card centers perfectly at scroll 100%
+  const maxScroll = containerWidth > windowWidth ? -(containerWidth - windowWidth) : 0;
+  
+  const x = useTransform(scrollYProgress, (latest) => {
+    if (latest < 0.05) return 0;
+    if (latest >= 1.0) return maxScroll;
+    // Map progress from 0.05 to 1.0 to translateX from 0 to maxScroll
+    const progress = (latest - 0.05) / (1.0 - 0.05); // Normalize to 0-1
+    return progress * maxScroll;
+  });
+  const springX = useSpring(x, { stiffness: 400, damping: 40 });
 
   // Task 3: Robust Scroll Spy & Navigation
   // Use ranges, not centers: Active Category is where currentScrollX >= categoryStartX AND currentScrollX < nextCategoryStartX
@@ -419,10 +442,10 @@ export default function HomeClient({ items, categories = ['All', 'Work', 'Lab', 
       }
       
       // Map clampedTranslateX to scroll progress (0.0 to 1.0)
-      // Horizontal scroll happens from progress 0.1 to 1.0
-      // So: progress = 0.1 + (0.9 * normalizedTranslateX)
+      // Horizontal scroll happens from progress 0.05 to 1.0
+      // So: progress = 0.05 + (0.95 * normalizedTranslateX)
       const normalizedTranslateX = Math.abs(clampedTranslateX / maxScroll);
-      const targetProgress = 0.1 + (normalizedTranslateX * 0.9); // Map to [0.1, 1.0]
+      const targetProgress = 0.05 + (normalizedTranslateX * 0.95); // Map to [0.05, 1.0]
       
       if (isNaN(targetProgress) || !isFinite(targetProgress)) {
         console.warn('Invalid progress calculation, cannot scroll.');
