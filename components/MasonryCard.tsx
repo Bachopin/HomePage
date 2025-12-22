@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect } from 'react';
 import { motion, MotionValue } from 'framer-motion';
 import { ArrowUpRight } from 'lucide-react';
 import { useParallax, ImageSize } from '@/hooks/useParallax';
@@ -103,7 +103,6 @@ function IntroOutroCard({
   gridArea,
   width,
 }: IntroOutroCardProps) {
-  const [isHovered, setIsHovered] = useState(false);
   const hasLink = Boolean(link && link !== '#');
 
   const CardWrapper = hasLink ? 'a' : 'div';
@@ -132,8 +131,6 @@ function IntroOutroCard({
         ...positionStyle,
         borderRadius: UI.cardBorderRadius,
       }}
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
       whileHover={{ scale: ANIMATION.cardHoverScale }}
       transition={{ duration: ANIMATION.hoverDuration }}
     >
@@ -301,7 +298,6 @@ export default function MasonryCard({
   cardPosition,
   absolutePosition,
 }: MasonryCardProps) {
-  const [isHovered, setIsHovered] = useState(false);
   const [imageLoaded, setImageLoaded] = useState(false);
   const [imageError, setImageError] = useState(false);
   const [imgSize, setImgSize] = useState<ImageSize | null>(null);
@@ -388,8 +384,6 @@ export default function MasonryCard({
         ...positionStyle,
         borderRadius: UI.cardBorderRadius,
       }}
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
       whileHover={{ scale: ANIMATION.cardHoverScale }}
       transition={{ duration: ANIMATION.hoverDuration }}
     >

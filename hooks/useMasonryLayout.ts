@@ -224,7 +224,6 @@ export function useMasonryLayout({
 
     // 获取响应式布局配置
     const layout = getLayoutConfig(windowWidth);
-    const { gap, minPadding, rowHeight } = layout;
 
     // 空数据早返回
     if (!items || items.length === 0) {
@@ -253,7 +252,7 @@ export function useMasonryLayout({
       windowWidth,
       firstDims,
       lastDims,
-      minPadding
+      layout.minPadding
     );
 
     // 网格占用管理器
