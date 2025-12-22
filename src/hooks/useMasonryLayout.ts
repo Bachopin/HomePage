@@ -260,7 +260,7 @@ export function useMasonryLayout({
     // 网格占用管理器
     const gridManager = new GridOccupancyManager(GRID.rows);
 
-    // 用于记录每个分类的目标卡片（Sort 值最小的卡片）
+    // 用于记录每个分类的目标卡片（Sort 值最小且不为空的卡片）
     const categoryTargetCards: Record<string, { index: number; sort: number; position: CardPosition }> = {};
 
     // 放置每张卡片
@@ -289,9 +289,9 @@ export function useMasonryLayout({
 
       positions[index] = position;
 
-      // 处理分类逻辑
-      if (item.type === 'project' && item.category) {
-        const category = item.category;
+      // 处理分类逻辑 - 只处理 project 类型且有分类的卡片
+      if (item.type === 'project' && item.category && item.category.trim() !== '') {
+        const category = item.category.trim();
 
         // 记录分类起始位置（每个分类第一张卡片的左边缘）
         if (categoryStarts[category] === undefined) {
@@ -312,21 +312,21 @@ export function useMasonryLayout({
       }
     });
 
-    // 设置每个分类的目标位置
+    // 设置每个分类的目标位置（使用目标卡片的左边缘）
     Object.keys(categoryTargetCards).forEach(category => {
-      // 使用目标卡片的中心位置
-      categoryTargets[category] = categoryTargetCards[category].position.centerX;
+      // 使用目标卡片的左边缘位置，这样当左边缘经过屏幕中线时切换分类
+      categoryTargets[category] = categoryTargetCards[category].position.left;
     });
 
-    // 对于没有 Sort 值的分类，使用第一张卡片的中心位置
+    // 对于没有 Sort 值的分类，使用第一张卡片的左边缘位置
     Object.keys(categoryStarts).forEach(category => {
       if (categoryTargets[category] === undefined) {
         // 找到该分类的第一张卡片
         const firstCardIndex = items.findIndex(item => 
-          item.type === 'project' && item.category === category
+          item.type === 'project' && item.category && item.category.trim() === category
         );
         if (firstCardIndex !== -1 && positions[firstCardIndex]) {
-          categoryTargets[category] = positions[firstCardIndex].centerX;
+          categoryTargets[category] = positions[firstCardIndex].left;
         } else {
           // 兜底：使用起始位置
           categoryTargets[category] = categoryStarts[category];

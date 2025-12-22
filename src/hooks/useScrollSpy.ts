@@ -90,19 +90,14 @@ export function useScrollSpy({
       let activeCategory = 'All';
 
       for (const category of orderedCategories) {
-        const targetX = categoryTargetX[category];
+        const targetLeftEdge = categoryTargetX[category];
         
-        if (targetX === undefined || isNaN(targetX)) {
+        if (targetLeftEdge === undefined || isNaN(targetLeftEdge)) {
           continue;
         }
 
-        // 计算目标卡片的左边缘位置
-        // 使用布局配置获取准确的卡片宽度
-        const layout = getLayoutConfig(windowWidth);
-        const cardHalfWidth = layout.columnWidth / 2; // 假设大多数卡片是1x1，使用单列宽度的一半
-        const cardLeftEdge = targetX - cardHalfWidth;
-        
-        if (absoluteXAtCenter >= cardLeftEdge) {
+        // 简单判断：当目标卡片的左边缘位置小于等于屏幕中心的绝对位置时，切换到该分类
+        if (absoluteXAtCenter >= targetLeftEdge) {
           activeCategory = category;
         }
       }
@@ -137,16 +132,21 @@ export function useScrollSpy({
           return;
         }
 
-        const targetX = categoryTargetX[category.trim()];
+        const targetLeftEdge = categoryTargetX[category.trim()];
 
-        if (targetX === undefined || isNaN(targetX)) {
+        if (targetLeftEdge === undefined || isNaN(targetLeftEdge)) {
           console.warn(`No target position found for category: "${category}"`);
           return;
         }
 
-        // 计算目标位置：将目标卡片居中
+        // 计算目标位置：将目标卡片居中显示
+        // 目标卡片的左边缘 + 卡片宽度的一半 = 卡片中心
+        // 屏幕中心 - 卡片中心 = 需要的 translateX
+        const layout = getLayoutConfig(windowWidth);
+        const cardHalfWidth = layout.columnWidth / 2; // 假设大多数是1x1卡片
+        const cardCenterX = targetLeftEdge + cardHalfWidth;
         const screenCenter = windowWidth / 2;
-        const targetTranslateX = screenCenter - targetX;
+        const targetTranslateX = screenCenter - cardCenterX;
 
         // 限制在有效范围内 [maxScroll, 0]
         const clampedTranslateX = Math.max(Math.min(targetTranslateX, 0), maxScroll);
