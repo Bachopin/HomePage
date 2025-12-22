@@ -1,5 +1,5 @@
 import type { RefObject } from 'react';
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import type { MotionValue } from 'framer-motion';
 import { useMotionValueEvent } from 'framer-motion';
 
@@ -31,6 +31,9 @@ export interface UseScrollSpyResult {
   scrollToCategory: (category: string) => void;
 }
 
+// 缩放阶段占比（前5%用于缩放动画）
+const SCALE_PHASE_RATIO = 0.05;
+
 /**
  * 滚动监听 Hook
  * 
@@ -47,70 +50,121 @@ export function useScrollSpy({
   scrollContainerRef,
 }: UseScrollSpyProps): UseScrollSpyResult {
   const [activeSection, setActiveSection] = useState<string>('All');
+  // 防止频繁更新
+  const lastActiveRef = useRef<string>('All');
 
   // 监听滚动：检测哪个分类的目标卡片左边缘已经过了屏幕中线
   useMotionValueEvent(scrollX, 'change', (currentX) => {
-    if (!categoryTargetInfo || Object.keys(categoryTargetInfo).length === 0) {
-      setActiveSection('All');
+    // 防御：无效数据
+    if (typeof currentX !== 'number' || isNaN(currentX)) {
       return;
     }
 
-    // currentX <= 0，是内容的水平偏移量
-    // 屏幕中线对应的内容坐标 = windowWidth/2 - currentX
+    // 防御：无分类数据
+    if (!categoryTargetInfo || typeof categoryTargetInfo !== 'object') {
+      if (lastActiveRef.current !== 'All') {
+        lastActiveRef.current = 'All';
+        setActiveSection('All');
+      }
+      return;
+    }
+
+    // 防御：无效窗口宽度
+    if (!windowWidth || windowWidth <= 0) {
+      return;
+    }
+
+    // 屏幕中线对应的内容坐标
+    // currentX 是负值或0，表示内容向左移动了多少
     const screenCenterInContent = windowWidth / 2 - currentX;
 
+    // 防御：计算结果无效
+    if (isNaN(screenCenterInContent)) {
+      return;
+    }
+
+    // 遍历分类，找到最后一个左边缘已过中线的
     let active = 'All';
+    
     for (const category of categories) {
+      // 跳过 All
       if (category === 'All') continue;
+      
       const info = categoryTargetInfo[category];
-      if (!info) continue;
+      // 防御：该分类无目标卡片信息
+      if (!info || typeof info.left !== 'number' || isNaN(info.left)) {
+        continue;
+      }
       
       // 卡片左边缘 <= 屏幕中线位置 → 这个分类激活
       if (info.left <= screenCenterInContent) {
         active = category;
       }
     }
-    setActiveSection(active);
+
+    // 只在变化时更新，避免不必要的渲染
+    if (lastActiveRef.current !== active) {
+      lastActiveRef.current = active;
+      setActiveSection(active);
+    }
   });
 
   // 点击导航：直接滚动到让目标卡片居中
   const scrollToCategory = useCallback(
     (category: string) => {
+      // 防御：无效参数
+      if (typeof category !== 'string') return;
+
       const container = scrollContainerRef.current;
+      // 防御：容器不存在
       if (!container) return;
 
+      // All = 回到顶部
       if (category === 'All') {
         container.scrollTo({ top: 0, behavior: 'smooth' });
         return;
       }
 
-      const info = categoryTargetInfo[category];
-      if (!info) return;
-      if (maxScroll === 0) return;
+      // 防御：无分类数据
+      if (!categoryTargetInfo || typeof categoryTargetInfo !== 'object') return;
 
-      // 要让卡片中心对齐屏幕中心
-      // 需要的 translateX = windowWidth/2 - cardCenterX
+      const info = categoryTargetInfo[category];
+      // 防御：该分类无目标卡片
+      if (!info || typeof info.centerX !== 'number' || isNaN(info.centerX)) return;
+
+      // 防御：无效窗口宽度
+      if (!windowWidth || windowWidth <= 0) return;
+
+      // 防御：无滚动空间（内容比视口窄）
+      if (maxScroll === 0 || maxScroll > 0) return;
+
+      // 计算目标 translateX：让卡片中心对齐屏幕中心
       const targetX = windowWidth / 2 - info.centerX;
+      
       // 限制范围 [maxScroll, 0]
       const clampedX = Math.max(Math.min(targetX, 0), maxScroll);
 
-      // translateX 和 scrollY 的关系：
-      // scrollY = 0 → translateX = 0
-      // scrollY = scrollHeight → translateX = maxScroll
-      // 所以 scrollY = scrollHeight * (translateX / maxScroll)
-      // 但要考虑前 5% 是缩放阶段，水平滚动从 5% 开始
-      // 实际水平滚动范围是 scrollHeight 的 95%
-      
+      // 获取滚动容器尺寸
       const scrollHeight = container.scrollHeight;
       const viewportHeight = container.clientHeight;
       const scrollableHeight = scrollHeight - viewportHeight;
-      
-      // translateX 从 0 到 maxScroll 对应 scrollY 从 5% 到 100%
-      // ratio = clampedX / maxScroll (0 到 1)
+
+      // 防御：无法滚动
+      if (scrollableHeight <= 0) return;
+
+      // translateX 从 0 到 maxScroll 对应滚动进度从 SCALE_PHASE_RATIO 到 1
+      // ratio = clampedX / maxScroll (0 到 1，因为两者都是负数或0)
       const ratio = clampedX / maxScroll;
-      // 对应的滚动进度 = 0.05 + ratio * 0.95
-      const scrollProgress = 0.05 + ratio * 0.95;
+      
+      // 防御：ratio 计算异常
+      if (isNaN(ratio) || !isFinite(ratio)) return;
+
+      // 对应的滚动进度
+      const scrollProgress = SCALE_PHASE_RATIO + ratio * (1 - SCALE_PHASE_RATIO);
       const targetScrollY = scrollableHeight * scrollProgress;
+
+      // 防御：目标位置无效
+      if (isNaN(targetScrollY) || targetScrollY < 0) return;
 
       container.scrollTo({ top: targetScrollY, behavior: 'smooth' });
     },

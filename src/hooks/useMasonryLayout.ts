@@ -221,11 +221,14 @@ export function useMasonryLayout({
     // 每个分类的目标卡片信息：{ left: 左边缘, centerX: 中心 }
     const categoryTargetInfo: Record<string, { left: number; centerX: number }> = {};
 
+    // 防御：无效窗口宽度
+    const safeWindowWidth = windowWidth > 0 ? windowWidth : 1920;
+    
     // 获取响应式布局配置
-    const layout = getLayoutConfig(windowWidth);
+    const layout = getLayoutConfig(safeWindowWidth);
 
     // 空数据早返回
-    if (!items || items.length === 0) {
+    if (!items || !Array.isArray(items) || items.length === 0) {
       return {
         cardPositions: positions,
         categoryTargetInfo,
@@ -234,17 +237,18 @@ export function useMasonryLayout({
       };
     }
 
-    // 计算首尾卡片尺寸
+    // 计算首尾卡片尺寸（带防御）
     const firstItem = items[0];
     const lastItem = items[items.length - 1];
-    const firstDims = getCardPixelDimensions(
-      (firstItem?.size || '1x1') as CardSize,
-      layout
-    );
-    const lastDims = getCardPixelDimensions(
-      (lastItem?.size || '1x1') as CardSize,
-      layout
-    );
+    const firstSize = (firstItem?.size && ['1x1', '1x2', '2x1', '2x2'].includes(firstItem.size)) 
+      ? firstItem.size as CardSize 
+      : '1x1';
+    const lastSize = (lastItem?.size && ['1x1', '1x2', '2x1', '2x2'].includes(lastItem.size)) 
+      ? lastItem.size as CardSize 
+      : '1x1';
+    
+    const firstDims = getCardPixelDimensions(firstSize, layout);
+    const lastDims = getCardPixelDimensions(lastSize, layout);
 
     // 计算非对称内边距
     const { paddingLeft, paddingRight } = calculateAsymmetricPadding(
@@ -262,9 +266,15 @@ export function useMasonryLayout({
 
     // 放置每张卡片
     items.forEach((item, index) => {
-      if (!item || !item.size) return;
+      // 防御：无效 item
+      if (!item) return;
+      
+      // 防御：无效 size，使用默认值
+      const size = (item.size && ['1x1', '1x2', '2x1', '2x2'].includes(item.size)) 
+        ? item.size as CardSize 
+        : '1x1';
 
-      const dims = getCardPixelDimensions(item.size as CardSize, layout);
+      const dims = getCardPixelDimensions(size, layout);
       const { row: startRow, col: startCol } = gridManager.findFirstAvailablePosition(
         dims.rows,
         dims.cols
@@ -276,13 +286,13 @@ export function useMasonryLayout({
       positions[index] = position;
 
       // 只处理 project 类型且有分类的卡片
-      if (item.type === 'project' && item.category) {
+      if (item.type === 'project' && item.category && typeof item.category === 'string') {
         const category = item.category.trim();
         if (!category) return;
 
         const sort = item.sort;
-        // Sort 必须存在且 > 0
-        if (typeof sort === 'number' && !isNaN(sort) && sort > 0) {
+        // Sort 必须是有效数字且 > 0
+        if (typeof sort === 'number' && !isNaN(sort) && isFinite(sort) && sort > 0) {
           const current = categoryBestCard[category];
           if (!current || sort < current.sort) {
             categoryBestCard[category] = {
