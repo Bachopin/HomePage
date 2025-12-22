@@ -56,6 +56,7 @@ export default function HomeClient({ items, categories = ['All', 'Work', 'Lab', 
   const springX = useSpring(x, { stiffness: 400, damping: 40 });
 
   // Grid simulator: Calculate card positions in a 2-row grid layout
+  // This simulates CSS grid-auto-flow: column behavior (fills columns top-to-bottom, then moves to next column)
   const { categoryOffsets, cardPositions, cardLeftEdges, cardWidths } = useMemo(() => {
     const offsets: Record<string, number> = {};
     const positions: number[] = [];
@@ -64,6 +65,11 @@ export default function HomeClient({ items, categories = ['All', 'Work', 'Lab', 
     const gap = 24; // 1.5rem
     const columnWidth = 300; // Base column width
     const introPadding = windowWidth ? windowWidth / 2 - 312 : 0;
+
+    // Early return if no items
+    if (!items || items.length === 0) {
+      return { categoryOffsets: offsets, cardPositions: positions, cardLeftEdges: leftEdges, cardWidths: widths };
+    }
 
     // Grid occupancy map: 2 rows, dynamically expanding columns
     // occupied[row][column] = true if that cell is occupied
@@ -108,17 +114,22 @@ export default function HomeClient({ items, categories = ['All', 'Work', 'Lab', 
     };
 
     // Place each card in the grid
+    // CSS grid-auto-flow: column behavior:
+    // - Fills columns first (top-to-bottom within each column)
+    // - Then moves to the next column
+    // - For multi-column items, they span from their start column
     items.forEach((item, index) => {
       const { rows, cols, width } = getCardDimensions(item.size);
       
-      // Find the first available position (top-left, left-to-right, top-to-bottom)
+      // Find the first available position
+      // Search column by column (left to right), row by row within each column (top to bottom)
       let placed = false;
       let startRow = 0;
       let startCol = 0;
 
-      // Search for available position (left-to-right, top-to-bottom)
-      // Start from column 0 and go right, checking each row from top to bottom
-      for (let col = 0; col <= maxColumn + 10; col++) { // Add buffer for safety
+      // Start from column 0, check each column
+      // For each column, check rows from top (0) to bottom (2-rows)
+      for (let col = 0; col <= Math.max(maxColumn + 1, 0); col++) {
         for (let row = 0; row <= 2 - rows; row++) {
           if (canFit(row, col, rows, cols)) {
             startRow = row;
@@ -130,19 +141,19 @@ export default function HomeClient({ items, categories = ['All', 'Work', 'Lab', 
         if (placed) break;
       }
 
+      // If still not placed (shouldn't happen, but safety), place at next column
       if (!placed) {
-        // Fallback: place at the next available column, starting from row 0
         startCol = maxColumn + 1;
         startRow = 0;
-        // Mark as placed for fallback
         placed = true;
       }
 
       // Mark cells as occupied
       markOccupied(startRow, startCol, rows, cols);
 
-      // Calculate actual pixel positions
-      // leftEdge = introPadding + startCol * (columnWidth + gap)
+      // Calculate actual pixel positions based on column position
+      // Each column is columnWidth wide, with gap between columns
+      // For multi-column items (2x1, 2x2), they span 2 columns, so width includes gap
       const leftEdge = introPadding + startCol * (columnWidth + gap);
       const centerX = leftEdge + width / 2;
 
