@@ -38,6 +38,12 @@ interface MasonryCardProps {
     width: number;
     height: number;
   };
+  // Intro 独立缩放
+  introScale?: MotionValue<number>;
+  // Outro 独立缩放
+  outroScale?: MotionValue<number>;
+  // 卡片透明度
+  cardOpacity?: MotionValue<number>;
 }
 
 // ============================================================================
@@ -94,6 +100,8 @@ interface IntroOutroCardProps {
   absolutePosition?: MasonryCardProps['absolutePosition'];
   gridArea: string;
   width: string;
+  introScale?: MotionValue<number>;
+  outroScale?: MotionValue<number>;
 }
 
 function IntroOutroCard({
@@ -104,6 +112,8 @@ function IntroOutroCard({
   absolutePosition,
   gridArea,
   width,
+  introScale,
+  outroScale,
 }: IntroOutroCardProps) {
   const hasLink = Boolean(link && link !== '#');
 
@@ -126,14 +136,19 @@ function IntroOutroCard({
       }
     : { width };
 
+  // 使用 introScale 或 outroScale
+  const cardScale = introScale || outroScale;
+
   return (
     <motion.div
       className={`group relative overflow-hidden bg-black dark:bg-white ${hasLink ? 'cursor-pointer' : 'cursor-default'} ${absolutePosition ? '' : gridArea}`}
       style={{
         ...positionStyle,
         borderRadius: UI.cardBorderRadius,
+        scale: cardScale,
+        transformOrigin: 'center center',
       }}
-      whileHover={{ scale: ANIMATION.cardHoverScale }}
+      whileHover={{ scale: cardScale ? undefined : ANIMATION.cardHoverScale }}
       transition={{ duration: ANIMATION.hoverDuration }}
     >
       <CardWrapper {...wrapperProps} className="block w-full h-full">
@@ -308,6 +323,9 @@ export default function MasonryCard({
   description,
   cardPosition,
   absolutePosition,
+  introScale,
+  outroScale,
+  cardOpacity,
 }: MasonryCardProps) {
   const [imageLoaded, setImageLoaded] = useState(false);
   const [imageError, setImageError] = useState(false);
@@ -371,6 +389,8 @@ export default function MasonryCard({
         absolutePosition={absolutePosition}
         gridArea={gridAreaClass}
         width={widthStyle}
+        introScale={introScale}
+        outroScale={outroScale}
       />
     );
   }
@@ -404,6 +424,7 @@ export default function MasonryCard({
       style={{
         ...positionStyle,
         borderRadius: UI.cardBorderRadius,
+        opacity: cardOpacity,
       }}
       whileHover={{ scale: ANIMATION.cardHoverScale }}
       transition={{ duration: ANIMATION.hoverDuration }}

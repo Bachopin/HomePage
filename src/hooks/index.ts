@@ -14,3 +14,6 @@ export type { ImageSize, CardDimensions, UseParallaxProps, ParallaxGeometry, Par
 
 export { useScrollSpy } from './useScrollSpy';
 export type { UseScrollSpyProps, UseScrollSpyResult } from './useScrollSpy';
+
+export { useInfiniteScroll, PHASE_BOUNDARIES, SCALE } from './useInfiniteScroll';
+export type { UseInfiniteScrollProps, UseInfiniteScrollResult } from './useInfiniteScroll';
