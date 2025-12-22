@@ -131,9 +131,15 @@ export default function HomeClient({ items, categories = ['All', 'Work', 'Lab', 
     // Determine layout mode
     const isMobile = windowWidth < 640;
     
-    // Responsive column width: mobile uses full width minus padding, desktop uses fixed 300px
-    const columnWidth = isMobile ? Math.max(windowWidth - 48, 200) : 300;
-    const rowHeight = isMobile ? columnWidth : 300; // On mobile, maintain square aspect ratio
+    // Responsive column width:
+    // - Desktop: fixed 300px
+    // - Mobile: calculate so that two columns plus gap fit within screen width minus padding
+    const mobilePadding = 32; // 16px each side
+    const columnWidth = isMobile
+      ? (windowWidth - mobilePadding - gap) / 2
+      : 300;
+    // Maintain square grid unit for all viewports
+    const rowHeight = columnWidth;
 
     // Early return if no items
     if (!sortedItems || sortedItems.length === 0) {
@@ -146,25 +152,13 @@ export default function HomeClient({ items, categories = ['All', 'Work', 'Lab', 
 
     // Helper function to get card dimensions in grid units
     const getCardDimensions = (size: string): { rows: number; cols: number; width: number; height: number } => {
-      if (isMobile) {
-        // Mobile: Force single column, scale heights proportionally
-        const baseHeight = columnWidth; // 1x1 base
-        switch (size) {
-          case '1x1': return { rows: 1, cols: 1, width: columnWidth, height: baseHeight };
-          case '1x2': return { rows: 1, cols: 1, width: columnWidth, height: baseHeight * 2 + gap };
-          case '2x1': return { rows: 1, cols: 1, width: columnWidth, height: baseHeight / 2 };
-          case '2x2': return { rows: 1, cols: 1, width: columnWidth, height: baseHeight * 2 + gap };
-          default: return { rows: 1, cols: 1, width: columnWidth, height: baseHeight };
-        }
-      } else {
-        // Desktop: Standard grid logic
-        switch (size) {
-          case '1x1': return { rows: 1, cols: 1, width: columnWidth, height: rowHeight };
-          case '1x2': return { rows: 2, cols: 1, width: columnWidth, height: rowHeight * 2 + gap };
-          case '2x1': return { rows: 1, cols: 2, width: columnWidth * 2 + gap, height: rowHeight };
-          case '2x2': return { rows: 2, cols: 2, width: columnWidth * 2 + gap, height: rowHeight * 2 + gap };
-          default: return { rows: 1, cols: 1, width: columnWidth, height: rowHeight };
-        }
+      // Standard grid logic for all viewports
+      switch (size) {
+        case '1x1': return { rows: 1, cols: 1, width: columnWidth, height: rowHeight };
+        case '1x2': return { rows: 2, cols: 1, width: columnWidth, height: rowHeight * 2 + gap };
+        case '2x1': return { rows: 1, cols: 2, width: columnWidth * 2 + gap, height: rowHeight };
+        case '2x2': return { rows: 2, cols: 2, width: columnWidth * 2 + gap, height: rowHeight * 2 + gap };
+        default: return { rows: 1, cols: 1, width: columnWidth, height: rowHeight };
       }
     };
 
@@ -178,8 +172,8 @@ export default function HomeClient({ items, categories = ['All', 'Work', 'Lab', 
     const paddingLeft = Math.max(24, (windowWidth - (firstDims as any).width) / 2);
     const paddingRight = Math.max(24, (windowWidth - (lastDims as any).width) / 2);
 
-    // Grid occupancy map: 2 rows for desktop, 1 row for mobile
-    const maxRows = isMobile ? 1 : 2;
+    // Grid occupancy map: 2 rows for both desktop and mobile
+    const maxRows = 2;
     const occupied: boolean[][] = [];
     for (let i = 0; i < maxRows; i++) {
       occupied.push([]);
