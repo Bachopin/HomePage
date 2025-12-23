@@ -14,10 +14,9 @@ export const notion = process.env.NOTION_API_KEY
 const DEFAULT_SITE_TITLE = 'Mextric Homepage';
 
 export interface DatabaseIcon {
-  type: 'emoji' | 'external' | 'file';
-  emoji?: string;
-  external?: { url: string };
-  file?: { url: string; expiry_time: string };
+  // 统一为图片 URL，复用现有图片处理逻辑
+  url: string;
+  type: 'emoji' | 'external' | 'file'; // 保留类型信息用于调试
 }
 
 export interface NotionItem {
@@ -144,8 +143,9 @@ export async function getCategoryOrder(): Promise<string[]> {
 
 /**
  * Parse database icon from Notion API response
+ * 统一处理所有图标类型为图片 URL，复用现有图片处理逻辑
  * @param iconData Raw icon data from Notion database
- * @returns Parsed DatabaseIcon or undefined
+ * @returns Parsed DatabaseIcon with unified URL or undefined
  */
 function parseDatabaseIcon(iconData: any): DatabaseIcon | undefined {
   if (!iconData || typeof iconData !== 'object') {
@@ -156,9 +156,11 @@ function parseDatabaseIcon(iconData: any): DatabaseIcon | undefined {
     switch (iconData.type) {
       case 'emoji':
         if (iconData.emoji && typeof iconData.emoji === 'string') {
+          // 将 emoji 转换为 SVG data URL，这样就能被现有图片逻辑处理
+          const emojiSvg = createEmojiSvgDataUrl(iconData.emoji);
           return {
+            url: emojiSvg,
             type: 'emoji',
-            emoji: iconData.emoji,
           };
         }
         break;
@@ -167,11 +169,8 @@ function parseDatabaseIcon(iconData: any): DatabaseIcon | undefined {
         // 处理自定义 emoji（实际上是图片文件）
         if (iconData.custom_emoji?.url && typeof iconData.custom_emoji.url === 'string') {
           return {
+            url: iconData.custom_emoji.url,
             type: 'file',
-            file: {
-              url: iconData.custom_emoji.url,
-              expiry_time: '',
-            },
           };
         }
         break;
@@ -179,8 +178,8 @@ function parseDatabaseIcon(iconData: any): DatabaseIcon | undefined {
       case 'external':
         if (iconData.external?.url && typeof iconData.external.url === 'string') {
           return {
+            url: iconData.external.url,
             type: 'external',
-            external: { url: iconData.external.url },
           };
         }
         break;
@@ -188,11 +187,8 @@ function parseDatabaseIcon(iconData: any): DatabaseIcon | undefined {
       case 'file':
         if (iconData.file?.url && typeof iconData.file.url === 'string') {
           return {
+            url: iconData.file.url,
             type: 'file',
-            file: {
-              url: iconData.file.url,
-              expiry_time: iconData.file.expiry_time || '',
-            },
           };
         }
         break;
@@ -206,6 +202,23 @@ function parseDatabaseIcon(iconData: any): DatabaseIcon | undefined {
   }
 
   return undefined;
+}
+
+/**
+ * 创建 emoji 的 SVG data URL
+ * 这样 emoji 就能被现有的图片处理逻辑处理
+ */
+function createEmojiSvgDataUrl(emoji: string): string {
+  const svg = `
+    <svg width="32" height="32" xmlns="http://www.w3.org/2000/svg">
+      <rect width="32" height="32" fill="transparent"/>
+      <text x="16" y="24" font-size="24" text-anchor="middle" font-family="system-ui, -apple-system, sans-serif">
+        ${emoji}
+      </text>
+    </svg>
+  `.trim();
+  
+  return `data:image/svg+xml,${encodeURIComponent(svg)}`;
 }
 
 export interface DatabaseWithItems {
