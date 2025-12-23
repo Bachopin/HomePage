@@ -43,8 +43,12 @@ export interface ImageServiceOptions {
 let imageMapping: ImageMapping[] = [];
 let mappingLoaded = false;
 
+// 客户端缓存 key
+const MAPPING_CACHE_KEY = 'image-mapping-cache';
+const MAPPING_CACHE_VERSION = 'v1';
+
 /**
- * 加载图片映射
+ * 加载图片映射（带客户端缓存）
  */
 async function loadImageMapping(): Promise<void> {
   if (mappingLoaded) return;
@@ -52,9 +56,34 @@ async function loadImageMapping(): Promise<void> {
   try {
     // 在客户端环境中加载映射文件
     if (typeof window !== 'undefined') {
+      // 尝试从 sessionStorage 读取缓存（同一会话内复用）
+      try {
+        const cached = sessionStorage.getItem(MAPPING_CACHE_KEY);
+        if (cached) {
+          const { version, data } = JSON.parse(cached);
+          if (version === MAPPING_CACHE_VERSION && Array.isArray(data)) {
+            imageMapping = data;
+            mappingLoaded = true;
+            return;
+          }
+        }
+      } catch {
+        // sessionStorage 不可用，继续 fetch
+      }
+      
       const response = await fetch('/images/optimized/image-mapping.json');
       if (response.ok) {
         imageMapping = await response.json();
+        
+        // 缓存到 sessionStorage
+        try {
+          sessionStorage.setItem(MAPPING_CACHE_KEY, JSON.stringify({
+            version: MAPPING_CACHE_VERSION,
+            data: imageMapping,
+          }));
+        } catch {
+          // sessionStorage 写入失败，忽略
+        }
       }
     } else {
       // 在服务端环境中加载映射文件
@@ -81,32 +110,38 @@ async function loadImageMapping(): Promise<void> {
 }
 
 /**
- * 从 Notion URL 提取文件路径（去掉签名参数）
- * 用于匹配本地优化图片
- */
-function extractNotionFilePath(url: string): string {
-  try {
-    const urlObj = new URL(url);
-    // 提取路径部分，去掉查询参数
-    // 例如: /c850dee3.../6d632a8c.../v2-3248f268021c7327e20c668616c89430_1440w.jpg
-    return urlObj.pathname;
-  } catch {
-    return url;
-  }
-}
-
-/**
  * 根据原始 URL 查找优化后的图片
- * 使用文件路径匹配（忽略签名参数）
+ * 
+ * 匹配策略：
+ * 1. 优先通过 URL 中的文件路径匹配（去除签名参数）
+ * 2. 如果 URL 包含 Notion 的 S3 路径，提取文件 ID 进行匹配
  */
 function findOptimizedImage(originalUrl: string): ImageMapping | null {
-  const targetPath = extractNotionFilePath(originalUrl);
+  if (!originalUrl || imageMapping.length === 0) return null;
   
-  return imageMapping.find(item => {
-    const itemPath = extractNotionFilePath(item.originalUrl);
+  // 提取 URL 的核心路径（去除查询参数）
+  const getUrlPath = (url: string): string => {
+    try {
+      const urlObj = new URL(url);
+      return urlObj.pathname;
+    } catch {
+      // 如果 URL 解析失败，尝试简单分割
+      return url.split('?')[0];
+    }
+  };
+  
+  const targetPath = getUrlPath(originalUrl);
+  
+  // 通过路径匹配
+  const match = imageMapping.find(item => {
+    const itemPath = getUrlPath(item.originalUrl);
     return itemPath === targetPath;
-  }) || null;
+  });
+  
+  return match || null;
 }
+
+
 
 // ============================================================================
 // 图片选择逻辑
@@ -204,8 +239,9 @@ export function getProxyImageUrl(
  * 获取优化后的图片 URL
  * 
  * 优先级：
- * 1. 本地优化图片（构建时生成）
- * 2. 实时代理（fallback）
+ * 1. 本地预优化图片（构建时生成，最快）
+ * 2. 代理实时优化（fallback，较慢）
+ * 3. 原图（最后手段）
  */
 export async function getOptimizedImageUrl(
   originalUrl: string,
@@ -224,35 +260,60 @@ export async function getOptimizedImageUrl(
     connectionType = 'unknown',
   } = options;
   
-  // 优先尝试本地优化图片
+  // 根据视口和设备选择尺寸
+  const targetSize = selectImageSize(viewportWidth, devicePixelRatio);
+  
+  // 慢速网络降级到更小尺寸
+  let effectiveSize = targetSize;
+  if (connectionType === 'slow') {
+    if (targetSize === 'large') effectiveSize = 'medium';
+    else if (targetSize === 'medium') effectiveSize = 'thumbnail';
+  }
+  
+  // 1. 优先尝试本地预优化图片
   await loadImageMapping();
   const optimizedImage = findOptimizedImage(originalUrl);
   
   if (optimizedImage) {
-    // 根据视口和设备选择尺寸
-    const targetSize = selectImageSize(viewportWidth, devicePixelRatio);
-    const versions = optimizedImage.optimized[targetSize];
-    
-    if (versions) {
-      const selectedImage = selectImageFormat(versions, preferWebP);
-      if (selectedImage) {
+    const sizeVersions = optimizedImage.optimized[effectiveSize];
+    if (sizeVersions) {
+      const selectedFormat = selectImageFormat(sizeVersions, preferWebP);
+      if (selectedFormat) {
+        // 找到本地优化图片，直接返回
         return {
-          primary: selectedImage.path,
+          primary: selectedFormat.path,
           fallback: originalUrl,
-          shouldUpgrade: false, // 已经是优化版本，不需要升级
+          shouldUpgrade: false, // 已经是优化版本，无需升级
         };
+      }
+    }
+    
+    // 如果目标尺寸没有，尝试其他尺寸（large > medium > thumbnail）
+    const fallbackSizes: (keyof OptimizedImageSizes)[] = ['large', 'medium', 'thumbnail'];
+    for (const size of fallbackSizes) {
+      if (size === effectiveSize) continue;
+      const versions = optimizedImage.optimized[size];
+      if (versions) {
+        const selectedFormat = selectImageFormat(versions, preferWebP);
+        if (selectedFormat) {
+          return {
+            primary: selectedFormat.path,
+            fallback: originalUrl,
+            shouldUpgrade: false,
+          };
+        }
       }
     }
   }
   
-  // Fallback: 使用实时代理
-  const targetWidth = selectImageSize(viewportWidth, devicePixelRatio);
+  // 2. 没有本地优化图片，使用代理实时优化
   const widthMap = {
     thumbnail: 200,
     medium: 800,
     large: 1200,
   };
-  const width = widthMap[targetWidth];
+  
+  const width = widthMap[effectiveSize];
   
   // 根据网络条件调整质量
   let quality = 85;
@@ -262,7 +323,6 @@ export async function getOptimizedImageUrl(
     quality = 90;
   }
   
-  // 生成代理 URL
   const proxyUrl = getProxyImageUrl(originalUrl, {
     width,
     quality,

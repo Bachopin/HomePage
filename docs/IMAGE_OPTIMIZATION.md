@@ -2,111 +2,78 @@
 
 ## 🎯 概述
 
-本系统实现了完整的图片优化流程，通过构建时预处理 + 运行时智能选择，大幅提升加载性能并减少服务器流量。
+本系统实现了完整的图片优化流程，从构建时预处理到运行时智能选择，大幅提升加载性能。
 
 ## 📊 性能提升
 
-- **文件大小**：1-5MB → 50-200KB（减少 86-95%）
-- **加载速度**：3-10秒 → 0.3-1秒
-- **服务器流量**：大幅减少（本地静态文件优先）
+- **文件大小**：1-5MB → 50-200KB（减少 90-95%）
+- **加载速度**：3-10秒 → 0.5-2秒
 - **用户体验**：几乎无感知加载
-
-## 🏗️ 系统架构
-
-### 图片加载优先级
-
-```
-1. 本地优化图片（构建时生成）→ 最快，零服务器流量
-2. 实时代理优化（fallback）→ 有内存缓存，减少重复下载
-3. Notion 原图（最后手段）→ 仅在前两者都失败时使用
-```
-
-### 构建时优化（scripts/optimize-images.js）
-
-1. **从 Notion 下载原图**
-2. **生成多尺寸版本**：
-   - thumbnail: 200px 宽，质量 80%
-   - medium: 800px 宽，质量 88%
-   - large: 1200px 宽，质量 92%
-3. **多格式输出**：WebP（优先）+ JPEG（兼容）
-4. **生成映射文件**：`image-mapping.json`
-
-### 运行时选择（src/lib/imageService.ts）
-
-1. **查找本地优化图片**：根据 Notion URL 查映射表
-2. **智能尺寸选择**：根据视口宽度和设备像素比
-3. **格式协商**：优先 WebP，回退 JPEG
-4. **Fallback 代理**：本地图片不存在时使用实时代理
-
-### 实时代理（src/pages/api/image-proxy.ts）
-
-- **内存缓存**：1小时 TTL，最多 100 张
-- **HTTP 缓存**：30天浏览器缓存，7天 CDN 缓存
-- **实时优化**：Sharp 处理，支持 WebP/JPEG
 
 ## 🔧 使用方法
 
 ### 1. 安装依赖
 
 ```bash
-npm install sharp dotenv
+npm install sharp
 ```
 
-### 2. 优化图片（构建前运行）
+### 2. 优化图片
 
 ```bash
-# 优化所有图片
-npm run optimize-images
-
-# 强制重新优化
+# 首次运行或强制重新优化
 npm run optimize-images:force
+
+# 增量优化（只处理新图片）
+npm run optimize-images
 ```
 
 ### 3. 构建项目
 
 ```bash
+# 自动优化图片并构建
 npm run build
+
+# 跳过图片优化直接构建（开发时使用）
+npm run build:fast
 ```
+
+## 🏗️ 系统架构
+
+### 构建时优化（scripts/optimize-images.js）
+
+1. **下载原图**：从 Notion 获取所有图片
+2. **生成多尺寸**：
+   - thumbnail: 200px 宽，质量 70%
+   - medium: 800px 宽，质量 80%
+   - large: 1200px 宽，质量 85%
+3. **多格式输出**：WebP + JPEG 备用
+4. **生成映射**：创建 URL 映射文件
+
+### 运行时选择（src/lib/imageService.ts）
+
+1. **智能尺寸选择**：根据视口宽度和设备像素比
+2. **格式协商**：优先 WebP，回退 JPEG
+3. **网络适配**：慢速网络自动降级
+4. **预加载策略**：关键图片优先加载
+
+### 缓存系统（src/hooks/useImageCache.ts）
+
+1. **全局缓存**：避免重复加载
+2. **智能清理**：30分钟过期，最多缓存50张
+3. **内存管理**：防止内存泄漏
 
 ## 📁 文件结构
 
 ```
 public/images/optimized/
 ├── image-mapping.json          # URL 映射文件
-├── item_xxx_thumbnail.webp     # 缩略图 WebP
-├── item_xxx_thumbnail.jpeg     # 缩略图 JPEG
-├── item_xxx_medium.webp        # 中等尺寸 WebP
-├── item_xxx_medium.jpeg        # 中等尺寸 JPEG
-├── item_xxx_large.webp         # 大尺寸 WebP
-└── item_xxx_large.jpeg         # 大尺寸 JPEG
-```
-
-## ⚙️ 配置
-
-### 图片尺寸配置（scripts/optimize-images.js）
-
-```javascript
-const CONFIG = {
-  sizes: {
-    thumbnail: { width: 200, quality: 80 },
-    medium: { width: 800, quality: 88 },
-    large: { width: 1200, quality: 92 },
-  },
-  formats: ['webp', 'jpeg'],
-  concurrency: 5,
-};
-```
-
-### 运行时选择逻辑（src/lib/imageService.ts）
-
-```typescript
-function selectImageSize(viewportWidth: number, devicePixelRatio: number) {
-  const effectiveWidth = viewportWidth * devicePixelRatio;
-  
-  if (effectiveWidth <= 400) return 'thumbnail';
-  if (effectiveWidth <= 1000) return 'medium';
-  return 'large';
-}
+├── item_123_thumbnail.webp     # 缩略图 WebP
+├── item_123_thumbnail.jpeg     # 缩略图 JPEG
+├── item_123_medium.webp        # 中等尺寸 WebP
+├── item_123_medium.jpeg        # 中等尺寸 JPEG
+├── item_123_large.webp         # 大尺寸 WebP
+└── item_123_large.jpeg         # 大尺寸 JPEG
 ```
 
 ## 🔄 工作流程
@@ -114,10 +81,7 @@ function selectImageSize(viewportWidth: number, devicePixelRatio: number) {
 ### 开发环境
 
 ```bash
-# 首次运行优化脚本
-npm run optimize-images
-
-# 启动开发服务器
+# 启动开发服务器（使用原图）
 npm run dev
 ```
 
@@ -134,19 +98,56 @@ npm run build
 npm start
 ```
 
-### 新增图片后
+### CI/CD 集成
 
-```bash
-# 重新运行优化脚本（增量处理）
-npm run optimize-images
+```yaml
+# GitHub Actions 示例
+- name: Install dependencies
+  run: npm ci
+
+- name: Optimize images
+  run: npm run optimize-images
+
+- name: Build project
+  run: npm run build:fast  # 跳过重复优化
+```
+
+## ⚙️ 配置选项
+
+### 图片尺寸配置
+
+```javascript
+// scripts/optimize-images.js
+const CONFIG = {
+  sizes: {
+    thumbnail: { width: 200, quality: 70 },
+    medium: { width: 800, quality: 80 },
+    large: { width: 1200, quality: 85 },
+  },
+  formats: ['webp', 'jpeg'],
+  concurrency: 5,
+};
+```
+
+### 运行时选择逻辑
+
+```typescript
+// src/lib/imageService.ts
+function selectImageSize(viewportWidth: number, devicePixelRatio: number) {
+  const effectiveWidth = viewportWidth * devicePixelRatio;
+  
+  if (effectiveWidth <= 400) return 'thumbnail';
+  if (effectiveWidth <= 1000) return 'medium';
+  return 'large';
+}
 ```
 
 ## 🚨 注意事项
 
-1. **Notion URL 过期**：Notion 图片 URL 有时效性，本地优化图片不受影响
-2. **构建时间**：首次优化可能需要较长时间（取决于图片数量）
-3. **存储空间**：优化后的图片会占用额外空间（约为原图的 10-15%）
-4. **映射更新**：新增 Notion 图片后需重新运行优化脚本
+1. **Sharp 依赖**：需要安装 `sharp` 进行图片处理
+2. **构建时间**：首次优化可能需要较长时间
+3. **存储空间**：优化后的图片会占用额外空间
+4. **网络依赖**：需要能访问 Notion 图片 URL
 
 ## 🔍 故障排除
 
@@ -157,21 +158,42 @@ npm run optimize-images
 npm list sharp
 
 # 重新安装 Sharp
-npm uninstall sharp && npm install sharp
+npm uninstall sharp
+npm install sharp
 
-# 检查环境变量
-echo $NOTION_API_KEY
-echo $NOTION_DATABASE_ID
+# 清理并重新优化
+npm run optimize-images:force
 ```
 
 ### 图片不显示
 
-1. 检查 `public/images/optimized/image-mapping.json` 是否存在
-2. 检查映射文件中是否包含对应的 Notion URL
-3. 查看浏览器控制台网络请求
+1. 检查映射文件是否存在：`public/images/optimized/image-mapping.json`
+2. 检查优化后的图片文件是否生成
+3. 查看浏览器控制台错误信息
 
-### 加载仍然慢
+### 性能问题
 
-1. 确认本地优化图片已生成
-2. 检查浏览器 Network 面板，确认请求的是本地文件而非代理
-3. 清除浏览器缓存后重试
+1. 检查网络连接检测是否正常工作
+2. 验证预加载逻辑是否生效
+3. 监控缓存命中率
+
+## 📈 监控和分析
+
+### 性能指标
+
+- **LCP (Largest Contentful Paint)**：首屏最大内容绘制时间
+- **FID (First Input Delay)**：首次输入延迟
+- **CLS (Cumulative Layout Shift)**：累积布局偏移
+
+### 分析工具
+
+- Chrome DevTools Network 面板
+- Lighthouse 性能审计
+- WebPageTest 在线测试
+
+## 🔮 未来优化
+
+1. **AVIF 格式支持**：更先进的图片格式
+2. **懒加载优化**：Intersection Observer API
+3. **Service Worker 缓存**：离线图片缓存
+4. **CDN 集成**：阿里云 OSS / 腾讯云 COS

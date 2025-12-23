@@ -6,7 +6,6 @@
  * 2. 实时优化和缓存
  * 3. 自动处理 URL 过期
  * 4. 支持多种尺寸和格式
- * 5. 服务端内存缓存（减少重复下载）
  */
 
 import { NextApiRequest, NextApiResponse } from 'next';
@@ -19,8 +18,6 @@ import { getDatabaseItems } from '@/lib/notion';
 
 const CACHE_DURATION = 7 * 24 * 60 * 60; // 7天缓存
 const MAX_AGE = 30 * 24 * 60 * 60; // 30天浏览器缓存
-const MEMORY_CACHE_MAX_SIZE = 100; // 最大缓存数量
-const MEMORY_CACHE_TTL = 60 * 60 * 1000; // 1小时内存缓存
 
 interface ImageProxyQuery {
   url?: string;
@@ -28,50 +25,6 @@ interface ImageProxyQuery {
   h?: string;
   q?: string;
   f?: string;
-}
-
-// ============================================================================
-// 服务端内存缓存
-// ============================================================================
-
-interface CacheEntry {
-  buffer: Buffer;
-  contentType: string;
-  timestamp: number;
-}
-
-const memoryCache = new Map<string, CacheEntry>();
-
-function getCacheKey(url: string, width?: number, height?: number, quality?: number, format?: string): string {
-  return `${url}-${width || 'auto'}-${height || 'auto'}-${quality || 85}-${format || 'webp'}`;
-}
-
-function getFromCache(key: string): CacheEntry | null {
-  const entry = memoryCache.get(key);
-  if (!entry) return null;
-  
-  // 检查是否过期
-  if (Date.now() - entry.timestamp > MEMORY_CACHE_TTL) {
-    memoryCache.delete(key);
-    return null;
-  }
-  
-  return entry;
-}
-
-function setToCache(key: string, buffer: Buffer, contentType: string): void {
-  // 限制缓存大小
-  if (memoryCache.size >= MEMORY_CACHE_MAX_SIZE) {
-    // 删除最旧的条目
-    const oldestKey = memoryCache.keys().next().value;
-    if (oldestKey) memoryCache.delete(oldestKey);
-  }
-  
-  memoryCache.set(key, {
-    buffer,
-    contentType,
-    timestamp: Date.now(),
-  });
 }
 
 // ============================================================================
@@ -201,36 +154,20 @@ export default async function handler(
     const format = f === 'jpeg' ? 'jpeg' : 'webp';
 
     // 生成缓存键
-    const decodedUrl = decodeURIComponent(url);
-    const cacheKey = getCacheKey(decodedUrl, width, height, quality, format);
-    
-    // 检查内存缓存
-    const cached = getFromCache(cacheKey);
-    if (cached) {
-      res.setHeader('Cache-Control', `public, max-age=${MAX_AGE}, s-maxage=${CACHE_DURATION}`);
-      res.setHeader('CDN-Cache-Control', `public, max-age=${CACHE_DURATION}`);
-      res.setHeader('X-Cache', 'HIT');
-      res.setHeader('Content-Type', cached.contentType);
-      res.setHeader('Content-Length', cached.buffer.length);
-      return res.send(cached.buffer);
-    }
+    const cacheKey = `${url}-${width || 'auto'}-${height || 'auto'}-${quality}-${format}`;
     
     // 设置缓存头
     res.setHeader('Cache-Control', `public, max-age=${MAX_AGE}, s-maxage=${CACHE_DURATION}`);
     res.setHeader('CDN-Cache-Control', `public, max-age=${CACHE_DURATION}`);
-    res.setHeader('X-Cache', 'MISS');
     
     // 获取和优化图片
     const { buffer, contentType } = await fetchAndOptimizeImage(
-      decodedUrl,
+      decodeURIComponent(url),
       width,
       height,
       quality,
       format
     );
-    
-    // 存入内存缓存
-    setToCache(cacheKey, buffer, contentType);
     
     // 设置响应头
     res.setHeader('Content-Type', contentType);

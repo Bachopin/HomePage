@@ -101,8 +101,8 @@ export function calculateParallaxGeometry(
     const renderedImgWidth = cardH * imgRatio * imageScale;
     const totalOverflow = renderedImgWidth - cardW;
     maxOffset = totalOverflow / 2;
-    // 初始位置：显示图片右侧部分
-    initialOffset = -maxOffset;
+    // 初始位置：图片左侧对齐卡片左边（显示图片左侧部分）
+    initialOffset = maxOffset;
   } else if (imgRatio < cardRatio) {
     // 图片填满宽度，计算缩放后的高度
     const renderedImgHeight = (cardW / imgRatio) * imageScale;
@@ -121,7 +121,7 @@ export function calculateParallaxGeometry(
   return {
     maxOffset: safeLimit,
     isHorizontalMove,
-    initialOffset: -safeLimit, // 重新计算安全的初始偏移
+    initialOffset: isHorizontalMove ? safeLimit : -safeLimit, // 水平移动时从右侧开始，垂直移动时从底部开始
   };
 }
 
@@ -135,7 +135,8 @@ export function calculateParallaxGeometry(
  * 算法说明：
  * 1. 只有当卡片中心越过视口中心后才开始视差效果
  * 2. 使用卡片宽度作为视差效果的完整范围
- * 3. 图片从初始位置移动到对侧位置
+ * 3. 水平移动：图片从右侧位置向左移动
+ * 4. 垂直移动：图片从底部位置向上移动
  */
 function calculateParallaxOffset(
   scrollValue: number,
@@ -144,7 +145,7 @@ function calculateParallaxOffset(
   viewportCenter: number,
   geometry: ParallaxGeometry
 ): number {
-  const { maxOffset, initialOffset } = geometry;
+  const { maxOffset, initialOffset, isHorizontalMove } = geometry;
 
   // 无滚动或无偏移量时返回初始位置
   if (scrollValue >= 0 || maxOffset === 0) {
@@ -164,11 +165,15 @@ function calculateParallaxOffset(
   // 使用卡片宽度作为视差范围
   const progress = Math.min(distancePastCenter / cardWidth, 1);
 
-  // 从初始位置移动到对侧
-  // 范围: [initialOffset, initialOffset + 2 * maxOffset]
-  const movement = initialOffset + progress * (2 * maxOffset);
-
-  return Math.min(Math.max(movement, initialOffset), initialOffset + 2 * maxOffset);
+  if (isHorizontalMove) {
+    // 水平移动：从 +maxOffset 向左移动到 -maxOffset
+    const movement = initialOffset - progress * (2 * maxOffset);
+    return Math.max(Math.min(movement, initialOffset), -maxOffset);
+  } else {
+    // 垂直移动：从 -maxOffset 向上移动到 +maxOffset
+    const movement = initialOffset + progress * (2 * maxOffset);
+    return Math.min(Math.max(movement, initialOffset), maxOffset);
+  }
 }
 
 // ============================================================================

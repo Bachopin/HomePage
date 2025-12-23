@@ -2,9 +2,9 @@
  * 渐进式图片加载 Hook
  * 
  * 职责：
- * 1. 优先显示 Notion 原图（快速显示）
- * 2. 后台加载优化图片（更好体验）
- * 3. 平滑切换到优化版本（无感知升级）
+ * 1. 优先使用本地预优化图片（最快）
+ * 2. 如果没有本地优化图片，使用代理优化
+ * 3. 最后 fallback 到原图
  */
 
 import { useState, useEffect } from 'react';
@@ -50,7 +50,7 @@ export function useProgressiveImage(
   // 使用缓存 hook 加载当前图片
   const { isLoaded, hasError } = useImageCache(currentImageUrl);
 
-  // 获取优化图片 URL
+  // 获取最佳图片 URL
   useEffect(() => {
     if (!originalUrl) {
       setCurrentImageUrl('');
@@ -60,25 +60,25 @@ export function useProgressiveImage(
     }
 
     if (!enableOptimization) {
+      // 禁用优化，直接使用原图
       setCurrentImageUrl(originalUrl);
       setIsOptimized(false);
       setLoadingProgress('complete');
       return;
     }
 
-    // 先设置为空，等待优化图片 URL
-    setLoadingProgress('original');
-
     // 异步获取优化图片 URL
+    setLoadingProgress('original');
+    
     getOptimizedImageUrl(originalUrl, {
       viewportWidth,
       devicePixelRatio,
       connectionType: detectConnectionType(),
     }).then(result => {
       if (result.primary) {
-        // 优先使用优化图片（本地或代理）
+        // 直接使用优化后的图片（本地预优化或代理）
         setCurrentImageUrl(result.primary);
-        setIsOptimized(!result.shouldUpgrade); // 本地图片 = 已优化
+        setIsOptimized(!result.shouldUpgrade); // shouldUpgrade=false 表示是本地预优化图片
         setLoadingProgress('complete');
       } else {
         // 没有优化图片，使用原图
@@ -88,7 +88,7 @@ export function useProgressiveImage(
       }
     }).catch(error => {
       console.warn('Failed to get optimized image URL:', error);
-      // 出错时使用原图
+      // 出错时 fallback 到原图
       setCurrentImageUrl(originalUrl);
       setIsOptimized(false);
       setLoadingProgress('complete');
@@ -126,8 +126,8 @@ export function useProgressiveImagePreloader(
           connectionType: detectConnectionType(),
         });
         
-        if (result.shouldUpgrade && result.primary !== url) {
-          // 预加载优化图片
+        if (result.primary) {
+          // 预加载优化图片（本地或代理）
           const img = new Image();
           img.crossOrigin = 'anonymous';
           
