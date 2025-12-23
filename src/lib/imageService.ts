@@ -81,25 +81,31 @@ async function loadImageMapping(): Promise<void> {
 }
 
 /**
- * 提取 URL 的基础部分（不含查询参数）
+ * 从 Notion URL 提取文件路径（去掉签名参数）
+ * 用于匹配本地优化图片
  */
-function getBaseUrl(url: string): string {
+function extractNotionFilePath(url: string): string {
   try {
     const urlObj = new URL(url);
-    return `${urlObj.origin}${urlObj.pathname}`;
+    // 提取路径部分，去掉查询参数
+    // 例如: /c850dee3.../6d632a8c.../v2-3248f268021c7327e20c668616c89430_1440w.jpg
+    return urlObj.pathname;
   } catch {
-    // 如果 URL 解析失败，返回原始 URL
-    return url.split('?')[0];
+    return url;
   }
 }
 
 /**
  * 根据原始 URL 查找优化后的图片
- * 使用基础 URL 匹配，忽略签名参数
+ * 使用文件路径匹配（忽略签名参数）
  */
 function findOptimizedImage(originalUrl: string): ImageMapping | null {
-  const baseUrl = getBaseUrl(originalUrl);
-  return imageMapping.find(item => getBaseUrl(item.originalUrl) === baseUrl) || null;
+  const targetPath = extractNotionFilePath(originalUrl);
+  
+  return imageMapping.find(item => {
+    const itemPath = extractNotionFilePath(item.originalUrl);
+    return itemPath === targetPath;
+  }) || null;
 }
 
 // ============================================================================

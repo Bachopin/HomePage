@@ -7,7 +7,7 @@
  * 3. 平滑切换到优化版本（无感知升级）
  */
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { getOptimizedImageUrl, detectConnectionType } from '@/lib/imageService';
 import { useImageCache } from './useImageCache';
 
@@ -38,7 +38,6 @@ export function useProgressiveImage(
   options: UseProgressiveImageOptions = {}
 ): UseProgressiveImageResult {
   const [currentImageUrl, setCurrentImageUrl] = useState<string>('');
-  const [optimizedUrl, setOptimizedUrl] = useState<string>('');
   const [isOptimized, setIsOptimized] = useState(false);
   const [loadingProgress, setLoadingProgress] = useState<'original' | 'optimized' | 'complete'>('original');
   
@@ -53,27 +52,36 @@ export function useProgressiveImage(
 
   // 获取优化图片 URL
   useEffect(() => {
-    if (!originalUrl || !enableOptimization) {
-      setCurrentImageUrl(originalUrl);
-      setOptimizedUrl('');
+    if (!originalUrl) {
+      setCurrentImageUrl('');
       setIsOptimized(false);
       setLoadingProgress('complete');
       return;
     }
 
-    // 异步获取优化图片 URL（可能是本地优化图片或代理）
+    if (!enableOptimization) {
+      setCurrentImageUrl(originalUrl);
+      setIsOptimized(false);
+      setLoadingProgress('complete');
+      return;
+    }
+
+    // 先设置为空，等待优化图片 URL
+    setLoadingProgress('original');
+
+    // 异步获取优化图片 URL
     getOptimizedImageUrl(originalUrl, {
       viewportWidth,
       devicePixelRatio,
       connectionType: detectConnectionType(),
     }).then(result => {
-      if (result.primary && result.primary !== originalUrl) {
-        // 有优化版本（本地或代理），直接使用
+      if (result.primary) {
+        // 优先使用优化图片（本地或代理）
         setCurrentImageUrl(result.primary);
-        setIsOptimized(!result.shouldUpgrade); // 本地图片 shouldUpgrade=false 表示已优化
+        setIsOptimized(!result.shouldUpgrade); // 本地图片 = 已优化
         setLoadingProgress('complete');
       } else {
-        // 没有优化版本，使用原图
+        // 没有优化图片，使用原图
         setCurrentImageUrl(originalUrl);
         setIsOptimized(false);
         setLoadingProgress('complete');
@@ -86,8 +94,6 @@ export function useProgressiveImage(
       setLoadingProgress('complete');
     });
   }, [originalUrl, viewportWidth, devicePixelRatio, enableOptimization]);
-
-  // 移除旧的预加载逻辑，因为现在直接使用优化图片
 
   return {
     currentImageUrl,
