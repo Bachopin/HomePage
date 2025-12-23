@@ -257,7 +257,7 @@ export interface MetadataConfig {
 
 export const METADATA: MetadataConfig = {
   // 浏览器标签页标题
-  title: 'Mextric - 注意力金融化观察者',
+  title: 'Mextric Home',
   // 搜索引擎结果中的描述（非常重要）
   description: 'Mextric，加密货币交易者、投研玩家。专注注意力金融化框架、链上Alpha猎手、Binance Alpha&Perp看板工具作者。每日加密日报、深度长文输出，观点尖锐且独立。DYOR & NFA。',
   // 关键词，帮助搜索引擎定位你的网站
