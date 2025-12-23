@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import type { MotionValue } from 'framer-motion';
-import { motion, useTransform } from 'framer-motion';
+import { motion, useTransform, useMotionValue } from 'framer-motion';
 import { ArrowUpRight } from 'lucide-react';
 import { useParallax, useProgressiveImage } from '@/hooks';
 import type { ImageSize } from '@/hooks';
@@ -268,30 +268,6 @@ function ProjectCardSkeleton() {
 // ============================================================================
 // Project Card Placeholder (Error State)
 // ============================================================================
-
-interface ProjectCardPlaceholderProps {
-  imageError: boolean;
-}
-
-function ProjectCardPlaceholder({
-  imageError,
-}: ProjectCardPlaceholderProps) {
-  // Show skeleton while loading, error state if failed
-  if (!imageError) {
-    return <ProjectCardSkeleton />;
-  }
-
-  // Error state - show minimal error indicator
-  return (
-    <div className="absolute inset-0 flex items-center justify-center bg-neutral-200 dark:bg-neutral-800">
-      <div className="w-8 h-8 rounded-full bg-neutral-300 dark:bg-neutral-700 flex items-center justify-center">
-        <span className="text-neutral-500 dark:text-neutral-400 text-xs">!</span>
-      </div>
-    </div>
-  );
-}
-
-// ============================================================================
 // Project Card Text Overlay - 图片卡片上的文字（带 Scramble 效果）
 // ============================================================================
 
@@ -460,6 +436,13 @@ export default function MasonryCard({
   const [imageOpacity, setImageOpacity] = useState(0);
   const [scrambleTrigger, setScrambleTrigger] = useState(0);
 
+  // Hook 调用必须在所有早期返回之前
+  const defaultOpacity = useMotionValue(1);
+  const pointerEvents = useTransform(
+    cardOpacity || defaultOpacity,
+    (opacity: number) => opacity < 0.1 ? 'none' : 'auto'
+  );
+
   // 使用渐进式图片加载
   const { 
     currentImageUrl, 
@@ -565,12 +548,6 @@ export default function MasonryCard({
 
   // 完全空白的卡片（无图片且无内容）应该透明
   const isEmptyPlaceholder = shouldShowAsTextCard && !hasContent;
-
-  // 当卡片透明度为0时禁用点击
-  const pointerEvents = useTransform(
-    cardOpacity || { get: () => 1 } as MotionValue<number>,
-    (opacity: number) => opacity < 0.1 ? 'none' : 'auto'
-  );
 
   return (
     <motion.div

@@ -94,22 +94,17 @@ export function calculateParallaxGeometry(
   const isHorizontalMove = imgRatio > cardRatio;
 
   let maxOffset = 0;
-  let initialOffset = 0;
 
   if (isHorizontalMove) {
     // 图片填满高度，计算缩放后的宽度
     const renderedImgWidth = cardH * imgRatio * imageScale;
     const totalOverflow = renderedImgWidth - cardW;
     maxOffset = totalOverflow / 2;
-    // 初始位置：图片左侧对齐卡片左边（显示图片左侧部分）
-    initialOffset = maxOffset;
   } else if (imgRatio < cardRatio) {
     // 图片填满宽度，计算缩放后的高度
     const renderedImgHeight = (cardW / imgRatio) * imageScale;
     const totalOverflow = renderedImgHeight - cardH;
     maxOffset = totalOverflow / 2;
-    // 初始位置：显示图片底部部分
-    initialOffset = -maxOffset;
   } else {
     // 宽高比完全匹配，无需移动
     return { maxOffset: 0, isHorizontalMove: false, initialOffset: 0 };

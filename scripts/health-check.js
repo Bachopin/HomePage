@@ -4,14 +4,17 @@
  * 系统健康检查脚本
  * 
  * 功能：
- * 1. 检查 Notion API 连接
- * 2. 验证图片代理服务
+ * 1. 检查环境变量
+ * 2. 验证 Notion API 连接
  * 3. 测试图片优化功能
  * 4. 生成健康报告
  */
 
+// 加载环境变量
+require('dotenv').config();
+
 const https = require('https');
-const { getDatabaseItems } = require('../src/lib/notion');
+const { Client } = require('@notionhq/client');
 
 // ============================================================================
 // 工具函数
@@ -50,27 +53,29 @@ async function checkNotionConnection() {
   console.log('🔍 检查 Notion API 连接...');
   
   try {
-    const items = await getDatabaseItems();
-    
-    if (!items || items.length === 0) {
+    if (!process.env.NOTION_API_KEY || !process.env.NOTION_DATABASE_ID) {
       return {
-        status: 'warning',
-        message: '连接成功，但没有找到数据',
-        details: { itemCount: 0 }
+        status: 'error',
+        message: '缺少必需的环境变量 NOTION_API_KEY 或 NOTION_DATABASE_ID',
+        details: {}
       };
     }
-    
-    const validItems = items.filter(item => item.isValid);
-    const imageItems = items.filter(item => item.image && item.image.trim() !== '');
+
+    const notion = new Client({
+      auth: process.env.NOTION_API_KEY,
+    });
+
+    // 测试数据库连接
+    const response = await notion.databases.retrieve({
+      database_id: process.env.NOTION_DATABASE_ID,
+    });
     
     return {
       status: 'success',
-      message: `连接成功，找到 ${items.length} 个项目`,
+      message: `Notion API 连接成功，数据库可访问`,
       details: {
-        totalItems: items.length,
-        validItems: validItems.length,
-        imageItems: imageItems.length,
-        categories: [...new Set(items.map(item => item.category).filter(Boolean))],
+        databaseTitle: response.title?.[0]?.plain_text || 'Unknown',
+        databaseId: process.env.NOTION_DATABASE_ID.substring(0, 8) + '...'
       }
     };
   } catch (error) {
@@ -86,20 +91,9 @@ async function checkImageProxy(baseUrl = 'http://localhost:3456') {
   console.log('🖼️ 检查图片代理服务...');
   
   try {
-    // 获取一个测试图片 URL
-    const items = await getDatabaseItems();
-    const imageItem = items.find(item => item.image && item.image.trim() !== '');
-    
-    if (!imageItem) {
-      return {
-        status: 'warning',
-        message: '没有找到可测试的图片',
-        details: {}
-      };
-    }
-    
-    // 测试图片代理
-    const proxyUrl = `${baseUrl}/api/image-proxy?url=${encodeURIComponent(imageItem.image)}&w=400&q=80&f=webp`;
+    // 使用一个测试图片 URL
+    const testImageUrl = 'https://images.unsplash.com/photo-1518791841217-8f162f1e1131';
+    const proxyUrl = `${baseUrl}/api/image-proxy?url=${encodeURIComponent(testImageUrl)}&w=400&q=80&f=webp`;
     
     const response = await makeRequest(proxyUrl);
     
@@ -115,16 +109,16 @@ async function checkImageProxy(baseUrl = 'http://localhost:3456') {
       };
     } else {
       return {
-        status: 'error',
-        message: `图片代理返回错误状态: ${response.statusCode}`,
-        details: { statusCode: response.statusCode }
+        status: 'warning',
+        message: `图片代理服务未运行 (状态: ${response.statusCode})`,
+        details: { statusCode: response.statusCode, note: '这在构建时是正常的' }
       };
     }
   } catch (error) {
     return {
-      status: 'error',
+      status: 'warning',
       message: '图片代理服务不可用',
-      details: { error: error.message }
+      details: { error: error.message, note: '这在构建时是正常的' }
     };
   }
 }

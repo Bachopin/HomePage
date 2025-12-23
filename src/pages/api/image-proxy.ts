@@ -153,8 +153,8 @@ export default async function handler(
     const quality = Math.min(100, Math.max(1, parseInt(q, 10)));
     const format = f === 'jpeg' ? 'jpeg' : 'webp';
 
-    // 生成缓存键
-    const cacheKey = `${url}-${width || 'auto'}-${height || 'auto'}-${quality}-${format}`;
+    // 生成缓存键（用于未来的缓存实现）
+    // const cacheKey = `${url}-${width || 'auto'}-${height || 'auto'}-${quality}-${format}`;
     
     // 设置缓存头
     res.setHeader('Cache-Control', `public, max-age=${MAX_AGE}, s-maxage=${CACHE_DURATION}`);

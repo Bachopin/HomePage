@@ -95,7 +95,7 @@ async function loadImageMapping(): Promise<void> {
       try {
         const data = await fs.readFile(mappingPath, 'utf-8');
         imageMapping = JSON.parse(data);
-      } catch (error) {
+      } catch {
         // 映射文件不存在，使用空数组
         imageMapping = [];
       }

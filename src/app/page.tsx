@@ -64,7 +64,7 @@ export default async function Home() {
               当前没有可显示的内容。
             </p>
             <p className="text-sm text-neutral-500 dark:text-neutral-500">
-              请检查 Notion 数据库配置，确保有标记为 "Live" 状态的项目。
+              请检查 Notion 数据库配置，确保有标记为 &ldquo;Live&rdquo; 状态的项目。
             </p>
           </div>
         </div>
@@ -90,7 +90,7 @@ export default async function Home() {
             当前没有可显示的内容。
           </p>
           <p className="text-sm text-neutral-500 dark:text-neutral-500">
-            请检查 Notion 数据库配置，确保有标记为 "Live" 状态的项目。
+            请检查 Notion 数据库配置，确保有标记为 &ldquo;Live&rdquo; 状态的项目。
           </p>
         </div>
       </div>

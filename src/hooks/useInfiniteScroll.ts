@@ -9,10 +9,10 @@
  * Phase 5 (96% - 100%): 循环重置 - 滚动回顶部，无缝切换
  */
 
-import { useCallback, useRef, useEffect } from 'react';
+import { useRef, useEffect } from 'react';
 import type { RefObject } from 'react';
 import type { MotionValue } from 'framer-motion';
-import { useTransform, useMotionValue } from 'framer-motion';
+import { useTransform } from 'framer-motion';
 
 // ============================================================================
 // Types
