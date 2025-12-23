@@ -156,10 +156,10 @@ function parseDatabaseIcon(iconData: any): DatabaseIcon | undefined {
     switch (iconData.type) {
       case 'emoji':
         if (iconData.emoji && typeof iconData.emoji === 'string') {
-          // 将 emoji 转换为 SVG data URL，这样就能被现有图片逻辑处理
-          const emojiSvg = createEmojiSvgDataUrl(iconData.emoji);
+          // 将 emoji 转换为真实的图片 URL，这样就能被现有图片逻辑处理
+          const emojiImageUrl = createEmojiImageUrl(iconData.emoji);
           return {
-            url: emojiSvg,
+            url: emojiImageUrl,
             type: 'emoji',
           };
         }
@@ -205,20 +205,23 @@ function parseDatabaseIcon(iconData: any): DatabaseIcon | undefined {
 }
 
 /**
- * 创建 emoji 的 SVG data URL
- * 这样 emoji 就能被现有的图片处理逻辑处理
+ * 创建 emoji 的图片 URL
+ * 使用 emoji 转图片服务，这样就能被现有的图片处理逻辑处理
  */
-function createEmojiSvgDataUrl(emoji: string): string {
-  const svg = `
-    <svg width="32" height="32" xmlns="http://www.w3.org/2000/svg">
-      <rect width="32" height="32" fill="transparent"/>
-      <text x="16" y="24" font-size="24" text-anchor="middle" font-family="system-ui, -apple-system, sans-serif">
-        ${emoji}
-      </text>
-    </svg>
-  `.trim();
+function createEmojiImageUrl(emoji: string): string {
+  // 使用 Twemoji CDN 或类似服务
+  // 但为了简单，我们先使用一个基于 emoji 的占位符服务
   
-  return `data:image/svg+xml,${encodeURIComponent(svg)}`;
+  // 方案1: 使用 emoji 的 Unicode 码点生成 Twemoji URL
+  const codePoint = emoji.codePointAt(0)?.toString(16).padStart(4, '0');
+  if (codePoint) {
+    // Twemoji CDN URL
+    return `https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/${codePoint}.png`;
+  }
+  
+  // 方案2: 回退到一个简单的占位符
+  // 这里我们可以使用一个生成占位符图片的服务
+  return `https://via.placeholder.com/72x72/6366f1/ffffff?text=${encodeURIComponent(emoji)}`;
 }
 
 export interface DatabaseWithItems {
