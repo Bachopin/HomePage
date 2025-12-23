@@ -5,7 +5,7 @@ import { motion, useScroll, useSpring, useTransform } from 'framer-motion';
 import { Navigation } from '@/components/layout';
 import { MasonryCard } from '@/components/features/home';
 import type { NotionItem } from '@/lib/notion';
-import { useMasonryLayout, useScrollSpy } from '@/hooks';
+import { useMasonryLayout, useScrollSpy, useProgressiveImagePreloader } from '@/hooks';
 import { ANIMATION, DEFAULTS } from '@/lib/config';
 
 // ============================================================================
@@ -92,6 +92,24 @@ export default function HomeClient({
   const sortedItems = useSortedItems(items, categories);
   const { windowWidth } = useWindowSize();
 
+  // 预加载关键图片（渐进式策略）
+  const criticalImageUrls = useMemo(() => {
+    return sortedItems
+      .filter(item => item.image && item.image.trim() !== '')
+      .slice(0, 6)
+      .map(item => item.image);
+  }, [sortedItems]);
+
+  // 预加载图片（结果用于后台优化，不阻塞渲染）
+  useProgressiveImagePreloader(
+    criticalImageUrls,
+    {
+      viewportWidth: windowWidth,
+      devicePixelRatio: typeof window !== 'undefined' ? window.devicePixelRatio : 1,
+      enableOptimization: true,
+    }
+  );
+
   const { cardPositions, categoryTargetInfo, containerWidth, gridHeight } = useMasonryLayout({
     items: sortedItems,
     windowWidth,
@@ -105,11 +123,11 @@ export default function HomeClient({
   const maxScroll = containerWidth > windowWidth ? -(containerWidth - windowWidth) : 0;
 
   // =========================================================================
-  // 动画值 - 不用弹簧，直接跟随，跳转无感
+  // 动画值 - 使用滚动进度驱动，弹簧提供平滑过渡
   // =========================================================================
   
-  // Intro 缩放：停留 → 缩小（加弹簧让它有粘滞感）
-  const introScaleRaw = useTransform(scrollYProgress, (p): number => {
+  // Intro 缩放：停留 → 缩小
+  const introScaleRaw = useTransform(scrollYProgress, (p: number) => {
     if (p < PHASES.introPauseEnd) return ANIMATION.imageScale;
     if (p < PHASES.introEnd) {
       const progress = (p - PHASES.introPauseEnd) / (PHASES.introEnd - PHASES.introPauseEnd);
@@ -117,10 +135,11 @@ export default function HomeClient({
     }
     return 1;
   });
-  const introScale = useSpring(introScaleRaw, { stiffness: 60, damping: 15 });
+  // 使用较软的弹簧，让快速滚动时也有平滑过渡
+  const introScale = useSpring(introScaleRaw, { stiffness: 40, damping: 20 });
 
-  // Outro 缩放：放大 → 停留（加弹簧让它有粘滞感）
-  const outroScaleRaw = useTransform(scrollYProgress, (p): number => {
+  // Outro 缩放：放大 → 停留
+  const outroScaleRaw = useTransform(scrollYProgress, (p: number) => {
     if (p < PHASES.outroStart) return 1;
     if (p < PHASES.outroPauseStart) {
       const progress = (p - PHASES.outroStart) / (PHASES.outroPauseStart - PHASES.outroStart);
@@ -128,7 +147,7 @@ export default function HomeClient({
     }
     return ANIMATION.imageScale;
   });
-  const outroScale = useSpring(outroScaleRaw, { stiffness: 60, damping: 15 });
+  const outroScale = useSpring(outroScaleRaw, { stiffness: 40, damping: 20 });
 
   // 水平位移
   const x = useTransform(scrollYProgress, (p): number => {
@@ -141,23 +160,37 @@ export default function HomeClient({
   // 使用更硬的弹簧，减少 Outro 缩放时的位置延迟
   const springX = useSpring(x, { stiffness: 800, damping: 50 });
 
-  // 内容透明度
-  const contentOpacity = useTransform(scrollYProgress, (p): number => {
+  // 内容透明度（与缩放动画同步，使用较软弹簧确保丝滑过渡）
+  const contentOpacityRaw = useTransform(scrollYProgress, (p: number): number => {
     // 停留区间：完全透明
     if (p < PHASES.introPauseEnd) return 0;
-    // 淡入
+    
+    // 淡入阶段：与 Intro 缩放同步，延迟30%开始
     if (p < PHASES.introEnd) {
-      return (p - PHASES.introPauseEnd) / (PHASES.introEnd - PHASES.introPauseEnd);
+      const totalDuration = PHASES.introEnd - PHASES.introPauseEnd;
+      const delayedStart = PHASES.introPauseEnd + totalDuration * 0.3;
+      if (p < delayedStart) return 0;
+      const progress = (p - delayedStart) / (PHASES.introEnd - delayedStart);
+      return Math.pow(progress, 0.8);
     }
+    
     // 正常可见
     if (p < PHASES.outroStart) return 1;
-    // 淡出
+    
+    // 淡出阶段：与 Outro 缩放同步，提前30%结束
     if (p < PHASES.outroPauseStart) {
-      return 1 - (p - PHASES.outroStart) / (PHASES.outroPauseStart - PHASES.outroStart);
+      const totalDuration = PHASES.outroPauseStart - PHASES.outroStart;
+      const earlyEnd = PHASES.outroStart + totalDuration * 0.7;
+      if (p > earlyEnd) return 0;
+      const progress = (p - PHASES.outroStart) / (earlyEnd - PHASES.outroStart);
+      return 1 - Math.pow(progress, 0.8);
     }
+    
     // 停留区间：完全透明
     return 0;
   });
+  // 使用较软弹簧，让快速滚动时透明度变化也平滑
+  const contentOpacity = useSpring(contentOpacityRaw, { stiffness: 40, damping: 20 });
 
   // =========================================================================
   // 无缝循环：停留 + 累积动量 + 瞬间跳转

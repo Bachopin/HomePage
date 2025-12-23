@@ -4,11 +4,17 @@
   "private": true,
   "scripts": {
     "dev": "next dev -p 3456 -H 0.0.0.0",
-    "build": "next build",
+    "build": "npm run optimize-images && next build",
+    "build:fast": "next build",
     "start": "next start -p 3456",
     "lint": "next lint",
     "restart": "sh scripts/restart.sh",
-    "quick-restart": "sh scripts/quick-restart.sh"
+    "quick-restart": "sh scripts/quick-restart.sh",
+    "optimize-images": "node scripts/optimize-images.js",
+    "optimize-images:force": "rm -rf public/images/optimized && npm run optimize-images",
+    "test-image-quality": "node scripts/test-image-quality.js",
+    "health-check": "node scripts/health-check.js",
+    "deploy-check": "npm run health-check && npm run build:fast"
   },
   "dependencies": {
     "@notionhq/client": "^5.6.0",
@@ -19,6 +25,7 @@
     "next": "^14.2.5",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
+    "sharp": "^0.33.5",
     "typed.js": "^2.1.0"
   },
   "devDependencies": {

@@ -17,3 +17,9 @@ export type { UseScrollSpyProps, UseScrollSpyResult } from './useScrollSpy';
 
 export { useInfiniteScroll, PHASE_BOUNDARIES, SCALE } from './useInfiniteScroll';
 export type { UseInfiniteScrollProps, UseInfiniteScrollResult } from './useInfiniteScroll';
+
+export { useImageCache } from './useImageCache';
+export type { ImageCacheEntry, UseImageCacheResult } from './useImageCache';
+
+export { useProgressiveImage, useProgressiveImagePreloader } from './useProgressiveImage';
+export type { UseProgressiveImageResult, UseProgressiveImageOptions } from './useProgressiveImage';

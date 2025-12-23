@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import type { MotionValue } from 'framer-motion';
 import { motion } from 'framer-motion';
 import { ArrowUpRight } from 'lucide-react';
-import { useParallax } from '@/hooks';
+import { useParallax, useProgressiveImage } from '@/hooks';
 import type { ImageSize } from '@/hooks';
 import {
   ANIMATION,
@@ -187,6 +187,7 @@ interface ProjectCardImageProps {
   parallaxX: MotionValue<number>;
   parallaxY: MotionValue<number>;
   scale: number;
+  opacity: number; // 新增：透明度控制
 }
 
 function ProjectCardImage({
@@ -196,6 +197,7 @@ function ProjectCardImage({
   parallaxX,
   parallaxY,
   scale,
+  opacity,
 }: ProjectCardImageProps) {
   return (
     <motion.div
@@ -208,12 +210,15 @@ function ProjectCardImage({
         x: isHorizontalMove ? parallaxX : 0,
         y: !isHorizontalMove ? parallaxY : 0,
         scale,
+        opacity, // 应用透明度
         backgroundImage: `url(${image})`,
         backgroundSize: 'cover',
         backgroundPosition: 'center center',
         backgroundRepeat: 'no-repeat',
         transformOrigin: 'center center',
       }}
+      animate={{ opacity }}
+      transition={{ duration: 0.3, ease: 'easeOut' }} // 平滑淡入动画
     />
   );
 }
@@ -224,23 +229,28 @@ function ProjectCardImage({
 
 function ProjectCardSkeleton() {
   return (
-    <div className="absolute inset-0 bg-neutral-200 dark:bg-neutral-800">
-      {/* Shimmer overlay */}
-      <div className="absolute inset-0 animate-pulse">
-        {/* Main skeleton area */}
-        <div className="w-full h-full bg-gradient-to-r from-neutral-200 via-neutral-300 to-neutral-200 dark:from-neutral-800 dark:via-neutral-700 dark:to-neutral-800 bg-[length:200%_100%] animate-shimmer" />
+    <motion.div 
+      className="absolute inset-0 bg-neutral-200 dark:bg-neutral-800"
+      initial={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.2 }}
+    >
+      {/* 更简洁的骨架屏 - 减少动画复杂度 */}
+      <div className="absolute inset-0">
+        {/* 主要区域 */}
+        <div className="w-full h-full bg-gradient-to-r from-neutral-200 via-neutral-300 to-neutral-200 dark:from-neutral-800 dark:via-neutral-700 dark:to-neutral-800" />
       </div>
       
-      {/* Bottom text skeleton */}
-      <div className="absolute bottom-0 left-0 right-0 p-6">
-        <div className="space-y-2">
+      {/* 底部文字骨架 - 更小更简洁 */}
+      <div className="absolute bottom-0 left-0 right-0 p-4">
+        <div className="space-y-1">
           {/* Year skeleton */}
-          <div className="h-3 w-16 bg-neutral-300 dark:bg-neutral-700 rounded animate-pulse" />
+          <div className="h-2 w-12 bg-neutral-300 dark:bg-neutral-700 rounded" />
           {/* Title skeleton */}
-          <div className="h-5 w-32 bg-neutral-300 dark:bg-neutral-700 rounded animate-pulse" />
+          <div className="h-3 w-24 bg-neutral-300 dark:bg-neutral-700 rounded" />
         </div>
       </div>
-    </div>
+    </motion.div>
   );
 }
 
@@ -327,9 +337,21 @@ export default function MasonryCard({
   outroScale,
   cardOpacity,
 }: MasonryCardProps) {
-  const [imageLoaded, setImageLoaded] = useState(false);
-  const [imageError, setImageError] = useState(false);
   const [imgSize, setImgSize] = useState<ImageSize | null>(null);
+  const [imageOpacity, setImageOpacity] = useState(0);
+
+  // 使用渐进式图片加载
+  const { 
+    currentImageUrl, 
+    isOptimized, 
+    isLoading, 
+    hasError,
+    loadingProgress 
+  } = useProgressiveImage(image || '', {
+    viewportWidth: typeof window !== 'undefined' ? window.innerWidth : 1200,
+    devicePixelRatio: typeof window !== 'undefined' ? window.devicePixelRatio : 1,
+    enableOptimization: true,
+  });
 
   // 获取布局配置
   const viewportWidth = typeof window !== 'undefined' ? window.innerWidth : DEFAULTS.windowWidth;
@@ -348,31 +370,33 @@ export default function MasonryCard({
     viewportWidth,
   });
 
-  // 预加载图片并获取尺寸
+  // 获取图片尺寸和设置透明度
   useEffect(() => {
-    if (type === 'project' && image && image.trim() !== '') {
-      const img = new Image();
-      img.src = image;
+    if (type === 'project' && currentImageUrl && currentImageUrl.trim() !== '' && !isLoading && !hasError) {
+      // 图片已加载，获取尺寸
+      const img = new window.Image();
+      img.src = currentImageUrl;
       img.onload = () => {
-        setImageLoaded(true);
         setImgSize({ w: img.naturalWidth, h: img.naturalHeight });
+        // 根据加载进度调整淡入速度
+        const fadeDelay = loadingProgress === 'complete' ? 10 : 50;
+        setTimeout(() => setImageOpacity(1), fadeDelay);
       };
-      img.onerror = () => {
-        setImageError(true);
-      };
-    } else if (type === 'project') {
-      // 没有图片的情况，直接设置为已加载
-      setImageLoaded(true);
+    } else if (type === 'project' && (!currentImageUrl || hasError)) {
+      // 无图片或图片错误
       setImgSize(null);
+      setImageOpacity(1);
     }
-  }, [image, type]);
+  }, [currentImageUrl, type, isLoading, hasError, loadingProgress]);
 
   // 判断是否有图片
-  const hasImage = image && image.trim() !== '';
-  // 判断是否应该显示占位符（只有在有图片但未加载完成时才显示）
-  const shouldShowPlaceholder = hasImage && (!imageLoaded || imageError || !imgSize);
+  const hasImage = currentImageUrl && currentImageUrl.trim() !== '';
+  // 判断是否应该显示占位符（只在有图片但正在加载且未出错时才显示）
+  const shouldShowPlaceholder = hasImage && isLoading && !hasError;
   // 判断是否有内容（Name、Summary、Year 任意一个有文字）
   const hasContent = (title && title.trim() !== '') || (description && description.trim() !== '') || (year && year.trim() !== '');
+  // 判断是否应该显示为文字卡片（无图片 或 图片加载失败）
+  const shouldShowAsTextCard = !hasImage || hasError;
 
   // Grid area class (for non-absolute positioning)
   const gridAreaClass = `row-span-${cardDims.rows} col-span-${cardDims.cols}`;
@@ -419,7 +443,7 @@ export default function MasonryCard({
     : { width: widthStyle };
 
   // 完全空白的卡片（无图片且无内容）应该透明
-  const isEmptyPlaceholder = !hasImage && !hasContent;
+  const isEmptyPlaceholder = shouldShowAsTextCard && !hasContent;
 
   return (
     <motion.div
@@ -434,25 +458,41 @@ export default function MasonryCard({
     >
       <CardWrapper {...wrapperProps} className="block w-full h-full">
         <div className={`w-full h-full relative overflow-hidden flex items-center justify-center ${isEmptyPlaceholder ? 'bg-transparent' : 'bg-neutral-200 dark:bg-neutral-800'}`}>
-          {/* Loading Skeleton / Error State - 只在有图片但未加载完成时显示 */}
+          {/* Loading Skeleton - 只在有图片但正在加载时显示 */}
           {shouldShowPlaceholder && (
-            <ProjectCardPlaceholder imageError={imageError} />
+            <ProjectCardSkeleton />
           )}
 
           {/* Image with Parallax - 只在有图片且加载成功时显示 */}
-          {hasImage && imageLoaded && !imageError && imgSize && (
+          {hasImage && !isLoading && !hasError && imgSize && (
             <ProjectCardImage
-              image={image}
+              image={currentImageUrl}
               imgSize={imgSize}
               isHorizontalMove={isHorizontalMove}
               parallaxX={parallaxX}
               parallaxY={parallaxY}
               scale={scale}
+              opacity={imageOpacity}
             />
           )}
 
-          {/* 无图片时的文字内容 */}
-          {!hasImage && hasContent && (
+          {/* 优化状态指示器（开发时可选显示） */}
+          {process.env.NODE_ENV === 'development' && 
+           process.env.NEXT_PUBLIC_SHOW_IMAGE_DEBUG === 'true' && 
+           hasImage && !isLoading && !hasError && (
+            <div className="absolute top-2 left-2 z-30">
+              <div className={`px-2 py-1 rounded text-xs font-mono ${
+                isOptimized 
+                  ? 'bg-green-500 text-white' 
+                  : 'bg-yellow-500 text-black'
+              }`}>
+                {isOptimized ? 'OPT' : 'ORIG'}
+              </div>
+            </div>
+          )}
+
+          {/* 文字卡片内容 - 无图片或图片加载失败时显示 */}
+          {shouldShowAsTextCard && hasContent && (
             <div className="absolute inset-0 flex items-center justify-center">
               <div className="text-center px-6">
                 {year && (
@@ -466,7 +506,7 @@ export default function MasonryCard({
                   </h3>
                 )}
                 {description && (
-                  <p className="text-sm text-neutral-600 dark:text-neutral-400 line-clamp-3">
+                  <p className="text-sm text-neutral-600 dark:text-neutral-400 line-clamp-3 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
                     {description}
                   </p>
                 )}
@@ -478,15 +518,15 @@ export default function MasonryCard({
           {isEmptyPlaceholder && null}
 
           {/* Gradient Overlay - 只在有图片且有文字时显示 */}
-          {hasImage && imageLoaded && !imageError && showText && (
+          {hasImage && !isLoading && !hasError && showText && (
             <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent z-10" />
           )}
 
           {/* Link Indicator */}
           <LinkIndicator visible={hasLink} />
 
-          {/* Text Overlay - 只在有图片时显示 */}
-          {hasImage && imageLoaded && !imageError && (
+          {/* Text Overlay - 只在有图片且成功加载时显示 */}
+          {hasImage && !isLoading && !hasError && (
             <ProjectCardTextOverlay
               title={title}
               year={year}
