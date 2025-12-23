@@ -28,6 +28,7 @@ src/
 │   │   ├── DisableContextMenu.tsx # 禁用右键菜单
 │   │   ├── ErrorBoundary.tsx     # 错误边界
 │   │   ├── InteractiveList.tsx   # 交互列表
+│   │   ├── ScrambleText.tsx      # 文字乱码解码动画
 │   │   └── TypedText.tsx         # 打字机效果
 │   ├── layout/                   # 全局布局组件
 │   │   ├── index.ts              # 桶文件导出
@@ -38,13 +39,17 @@ src/
 │       └── MasonryCard.tsx       # 瀑布流卡片（含骨架屏）
 ├── hooks/                        # 自定义 Hooks
 │   ├── index.ts                  # 桶文件导出
+│   ├── useImageCache.ts          # 图片缓存管理
+│   ├── useInfiniteScroll.ts      # 无限循环滚动（未启用）
 │   ├── useMasonryLayout.ts       # 瀑布流布局计算（智能填坑算法）
 │   ├── useMouse.ts               # 鼠标位置追踪
 │   ├── useParallax.ts            # 视差物理引擎
-│   ├── useScrollSpy.ts           # 滚动监听与导航
-│   └── useInfiniteScroll.ts      # 无限循环滚动（未启用）
+│   ├── useProgressiveImage.ts    # 渐进式图片加载
+│   └── useScrollSpy.ts           # 滚动监听与导航
 └── lib/                          # 工具库
     ├── config.ts                 # 全局配置中心（含 SEO 元数据）
+    ├── imageConfig.ts            # 图片优化配置
+    ├── imageService.ts           # 图片优化服务
     ├── notion.ts                 # Notion API 服务
     └── transformers.ts           # 数据转换器
 ```
@@ -176,6 +181,9 @@ npm start
 - ✅ 自定义 404 和全局错误边界
 - ✅ 严格 TypeScript 类型定义
 - ✅ 移动端适配（100dvh、overscroll-none）
+- ✅ 文字乱码解码动画（ScrambleText，基于 use-scramble）
+- ✅ 渐进式图片加载（缩略图 → 高清）
+- ✅ 图片缓存管理（避免重复加载）
 
 ## 版本
 

@@ -61,6 +61,10 @@ export interface AnimationConfig {
   cardHoverScale: number;
   /** 悬停动画时长 (秒) */
   hoverDuration: number;
+  /** 淡入淡出动画时长 (秒) */
+  fadeDuration: number;
+  /** 骨架屏动画时长 (秒) */
+  skeletonDuration: number;
   /** 主弹簧配置 */
   spring: SpringConfig;
   /** 缩放动画弹簧配置 */
@@ -179,6 +183,8 @@ export const ANIMATION: AnimationConfig = {
   parallaxSafetyFactor: 0.7,
   cardHoverScale: 1.02,
   hoverDuration: 0.2,
+  fadeDuration: 0.3,
+  skeletonDuration: 0.2,
   spring: {
     stiffness: 400,
     damping: 40,

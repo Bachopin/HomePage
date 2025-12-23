@@ -26,7 +26,8 @@
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "sharp": "^0.33.5",
-    "typed.js": "^2.1.0"
+    "typed.js": "^2.1.0",
+    "use-scramble": "^2.2.15"
   },
   "devDependencies": {
     "@types/node": "^20.14.12",

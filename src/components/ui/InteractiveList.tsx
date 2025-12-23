@@ -2,7 +2,8 @@
 
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useMouse } from '@/hooks/useMouse';
+import { useMouse } from '@/hooks';
+import { ANIMATION } from '@/lib/config';
 
 interface Item {
   id: number;
@@ -91,7 +92,7 @@ export default function InteractiveList({ items }: InteractiveListProps) {
             initial={{ opacity: 0, scale: 0.8 }}
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.8 }}
-            transition={{ duration: 0.2 }}
+            transition={{ duration: ANIMATION.hoverDuration }}
             className="fixed pointer-events-none z-50"
             style={{
               left: imagePosition.x,

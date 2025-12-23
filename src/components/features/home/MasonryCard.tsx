@@ -6,6 +6,7 @@ import { motion } from 'framer-motion';
 import { ArrowUpRight } from 'lucide-react';
 import { useParallax, useProgressiveImage } from '@/hooks';
 import type { ImageSize } from '@/hooks';
+import { ScrambleText } from '@/components/ui';
 import {
   ANIMATION,
   UI,
@@ -218,7 +219,7 @@ function ProjectCardImage({
         transformOrigin: 'center center',
       }}
       animate={{ opacity }}
-      transition={{ duration: 0.3, ease: 'easeOut' }} // 平滑淡入动画
+      transition={{ duration: ANIMATION.fadeDuration, ease: 'easeOut' }}
     />
   );
 }
@@ -233,7 +234,7 @@ function ProjectCardSkeleton() {
       className="absolute inset-0 bg-neutral-200 dark:bg-neutral-800"
       initial={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      transition={{ duration: 0.2 }}
+      transition={{ duration: ANIMATION.skeletonDuration }}
     >
       {/* 更简洁的骨架屏 - 减少动画复杂度 */}
       <div className="absolute inset-0">
@@ -281,35 +282,136 @@ function ProjectCardPlaceholder({
 }
 
 // ============================================================================
-// Project Card Text Overlay
+// Project Card Text Overlay - 图片卡片上的文字（带 Scramble 效果）
 // ============================================================================
 
 interface ProjectCardTextOverlayProps {
   title: string;
   year: string;
   description?: string;
+  scrambleTrigger?: number;
 }
 
 function ProjectCardTextOverlay({
   title,
   year,
   description,
+  scrambleTrigger,
 }: ProjectCardTextOverlayProps) {
+  const [isHovered, setIsHovered] = useState(false);
+  
   if (!year && !title) return null;
 
   return (
-    <div className="absolute bottom-0 left-0 right-0 p-6 z-20">
+    <div 
+      className="absolute bottom-0 left-0 right-0 p-6 z-20"
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+    >
       <div className="text-white">
         {year && (
-          <span className="text-xs font-mono opacity-70 text-white/90 mb-1 block">
-            {year}
-          </span>
+          <ScrambleText
+            text={year}
+            as="span"
+            className="text-xs font-mono opacity-70 text-white/90 mb-1 block"
+            triggerReplay={scrambleTrigger}
+          />
         )}
         {title && (
-          <h3 className="text-lg font-bold mb-1 opacity-100">{title}</h3>
+          <ScrambleText
+            text={title}
+            as="h3"
+            className="text-lg font-bold mb-1 opacity-100"
+            triggerReplay={scrambleTrigger}
+          />
         )}
         {description && (
-          <p className="text-sm opacity-0 group-hover:opacity-90 text-white/90 line-clamp-2 transition-opacity duration-300">
+          <p 
+            className="text-sm text-white/90 line-clamp-2 transition-all duration-300"
+            style={{
+              opacity: isHovered ? 0.9 : 0,
+              transform: isHovered ? 'translateY(0)' : 'translateY(4px)',
+            }}
+          >
+            {description}
+          </p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ============================================================================
+// Text Card Content - 纯文字卡片（带 Scramble 效果）
+// ============================================================================
+
+interface TextCardContentProps {
+  title: string;
+  year: string;
+  description?: string;
+  size: CardSize;
+  scrambleTrigger?: number;
+}
+
+function TextCardContent({
+  title,
+  year,
+  description,
+  size,
+  scrambleTrigger,
+}: TextCardContentProps) {
+  const [isHovered, setIsHovered] = useState(false);
+  
+  // 根据卡片尺寸调整
+  const isLarge = size === '2x2' || size === '2x1';
+  const isTall = size === '1x2' || size === '2x2';
+
+  return (
+    <div 
+      className="absolute inset-0 flex items-center justify-center"
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+    >
+      <div className="text-center px-6">
+        {/* Year - 带 scramble 效果 */}
+        {year && (
+          <ScrambleText
+            text={year}
+            as="span"
+            className={`
+              font-mono text-neutral-500 dark:text-neutral-400 mb-3 block
+              ${isLarge ? 'text-sm' : 'text-xs'}
+            `}
+            triggerReplay={scrambleTrigger}
+          />
+        )}
+        
+        {/* Title - 带 scramble 效果 */}
+        {title && (
+          <ScrambleText
+            text={title}
+            as="h3"
+            className={`
+              font-semibold text-neutral-700 dark:text-neutral-200 mb-2
+              ${isLarge ? 'text-xl md:text-2xl' : 'text-lg'}
+            `}
+            triggerReplay={scrambleTrigger}
+          />
+        )}
+        
+        {/* Description - 悬停时显示 */}
+        {description && (
+          <p 
+            className={`
+              text-neutral-500 dark:text-neutral-400 transition-all duration-300
+              ${isLarge ? 'text-sm' : 'text-xs'}
+              ${isTall ? 'line-clamp-4' : 'line-clamp-2'}
+            `}
+            style={{
+              opacity: isHovered ? 0.9 : 0,
+              transform: isHovered ? 'translateY(0)' : 'translateY(8px)',
+            }}
+          >
             {description}
           </p>
         )}
@@ -339,6 +441,7 @@ export default function MasonryCard({
 }: MasonryCardProps) {
   const [imgSize, setImgSize] = useState<ImageSize | null>(null);
   const [imageOpacity, setImageOpacity] = useState(0);
+  const [scrambleTrigger, setScrambleTrigger] = useState(0);
 
   // 使用渐进式图片加载
   const { 
@@ -455,6 +558,7 @@ export default function MasonryCard({
       }}
       whileHover={isEmptyPlaceholder ? undefined : { scale: ANIMATION.cardHoverScale }}
       transition={{ duration: ANIMATION.hoverDuration }}
+      onMouseEnter={() => setScrambleTrigger(prev => prev + 1)}
     >
       <CardWrapper {...wrapperProps} className="block w-full h-full">
         <div className={`w-full h-full relative overflow-hidden flex items-center justify-center ${isEmptyPlaceholder ? 'bg-transparent' : 'bg-neutral-200 dark:bg-neutral-800'}`}>
@@ -493,25 +597,13 @@ export default function MasonryCard({
 
           {/* 文字卡片内容 - 无图片或图片加载失败时显示 */}
           {shouldShowAsTextCard && hasContent && (
-            <div className="absolute inset-0 flex items-center justify-center">
-              <div className="text-center px-6">
-                {year && (
-                  <span className="text-xs font-mono opacity-60 text-neutral-500 dark:text-neutral-400 mb-2 block">
-                    {year}
-                  </span>
-                )}
-                {title && (
-                  <h3 className="text-lg font-medium text-neutral-700 dark:text-neutral-300 mb-2">
-                    {title}
-                  </h3>
-                )}
-                {description && (
-                  <p className="text-sm text-neutral-600 dark:text-neutral-400 line-clamp-3 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                    {description}
-                  </p>
-                )}
-              </div>
-            </div>
+            <TextCardContent
+              title={title}
+              year={year}
+              description={description}
+              size={size}
+              scrambleTrigger={scrambleTrigger}
+            />
           )}
 
           {/* 完全空白的卡片 - 透明占位，不显示任何内容 */}
@@ -531,6 +623,7 @@ export default function MasonryCard({
               title={title}
               year={year}
               description={description}
+              scrambleTrigger={scrambleTrigger}
             />
           )}
         </div>

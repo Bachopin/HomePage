@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
+import { ANIMATION } from '@/lib/config';
 
 export default function CrosshairToggle() {
   const [isDark, setIsDark] = useState(false);
@@ -38,7 +39,7 @@ export default function CrosshairToggle() {
         className="text-black dark:text-white pointer-events-auto cursor-pointer"
         whileHover={{ scale: 1.1, rotate: 90 }}
         whileTap={{ scale: 0.95 }}
-        transition={{ duration: 0.2 }}
+        transition={{ duration: ANIMATION.hoverDuration }}
         aria-label="Toggle dark mode"
       >
         <svg
