@@ -61,51 +61,33 @@ export function useProgressiveImage(
       return;
     }
 
-    // 立即设置原图作为初始显示
-    setCurrentImageUrl(originalUrl);
-    setIsOptimized(false);
-    setLoadingProgress('original');
-
-    // 异步获取优化图片
+    // 异步获取优化图片 URL（可能是本地优化图片或代理）
     getOptimizedImageUrl(originalUrl, {
       viewportWidth,
       devicePixelRatio,
       connectionType: detectConnectionType(),
     }).then(result => {
-      if (result.shouldUpgrade && result.primary !== originalUrl) {
-        setOptimizedUrl(result.primary);
-        setLoadingProgress('optimized');
+      if (result.primary && result.primary !== originalUrl) {
+        // 有优化版本（本地或代理），直接使用
+        setCurrentImageUrl(result.primary);
+        setIsOptimized(!result.shouldUpgrade); // 本地图片 shouldUpgrade=false 表示已优化
+        setLoadingProgress('complete');
       } else {
+        // 没有优化版本，使用原图
+        setCurrentImageUrl(originalUrl);
+        setIsOptimized(false);
         setLoadingProgress('complete');
       }
     }).catch(error => {
       console.warn('Failed to get optimized image URL:', error);
+      // 出错时使用原图
+      setCurrentImageUrl(originalUrl);
+      setIsOptimized(false);
       setLoadingProgress('complete');
     });
   }, [originalUrl, viewportWidth, devicePixelRatio, enableOptimization]);
 
-  // 预加载优化图片
-  useEffect(() => {
-    if (!optimizedUrl || optimizedUrl === currentImageUrl) return;
-
-    const img = new Image();
-    img.crossOrigin = 'anonymous';
-    
-    img.onload = () => {
-      // 优化图片加载完成，平滑切换
-      setCurrentImageUrl(optimizedUrl);
-      setIsOptimized(true);
-      setLoadingProgress('complete');
-    };
-    
-    img.onerror = () => {
-      // 优化图片加载失败，保持使用原图
-      console.warn('Failed to load optimized image, keeping original');
-      setLoadingProgress('complete');
-    };
-    
-    img.src = optimizedUrl;
-  }, [optimizedUrl, currentImageUrl]);
+  // 移除旧的预加载逻辑，因为现在直接使用优化图片
 
   return {
     currentImageUrl,

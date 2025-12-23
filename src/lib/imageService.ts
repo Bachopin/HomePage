@@ -81,10 +81,25 @@ async function loadImageMapping(): Promise<void> {
 }
 
 /**
+ * 提取 URL 的基础部分（不含查询参数）
+ */
+function getBaseUrl(url: string): string {
+  try {
+    const urlObj = new URL(url);
+    return `${urlObj.origin}${urlObj.pathname}`;
+  } catch {
+    // 如果 URL 解析失败，返回原始 URL
+    return url.split('?')[0];
+  }
+}
+
+/**
  * 根据原始 URL 查找优化后的图片
+ * 使用基础 URL 匹配，忽略签名参数
  */
 function findOptimizedImage(originalUrl: string): ImageMapping | null {
-  return imageMapping.find(item => item.originalUrl === originalUrl) || null;
+  const baseUrl = getBaseUrl(originalUrl);
+  return imageMapping.find(item => getBaseUrl(item.originalUrl) === baseUrl) || null;
 }
 
 // ============================================================================
