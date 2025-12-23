@@ -1,6 +1,54 @@
-# Notion-Powered Personal Homepage
+# 🎨 Notion-Powered Personal Homepage Template
 
-基于 Next.js 14 和 Notion API 构建的个人主页，采用水平滚动瀑布流布局，支持视差动画和无缝循环滚动效果。
+一个基于 Next.js 14 和 Notion API 的现代化个人主页模板，采用水平滚动瀑布流布局，支持视差动画和无缝循环滚动效果。
+
+**🚀 一键 Fork，快速部署你的个人网站！**
+
+## ✨ 为什么选择这个模板？
+
+- 🎯 **零代码内容管理** - 通过 Notion 数据库管理所有内容
+- 🎨 **现代化设计** - 独特的水平滚动瀑布流布局
+- ⚡ **性能优化** - ISR 增量更新，图片优化，骨架屏加载
+- 📱 **完全响应式** - 桌面和移动端完美适配
+- 🔧 **高度可定制** - 统一配置中心，轻松个性化
+- 🚀 **一键部署** - 完美支持 Vercel 部署
+
+## 🚀 快速开始
+
+### 1. Fork 并克隆项目
+```bash
+git clone https://github.com/your-username/your-repo-name.git
+cd your-repo-name
+npm install
+```
+
+### 2. 配置检查
+```bash
+npm run setup-check
+```
+
+### 3. 配置 Notion
+1. 创建 [Notion 集成](https://www.notion.so/my-integrations)
+2. 创建数据库（参考下方结构）
+3. 复制 `.env.example` 为 `.env` 并填入配置
+
+### 4. 个性化配置
+编辑 `src/lib/config.ts` 中的个人信息：
+```typescript
+export const METADATA = {
+  author: 'Your Name',
+  siteUrl: 'https://your-domain.com',
+  description: 'Your description...',
+  // ... 更多配置
+};
+```
+
+### 5. 部署到 Vercel
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new)
+
+**📚 详细指南**: [DEPLOYMENT_GUIDE.md](./DEPLOYMENT_GUIDE.md)
+
+---
 
 ## 技术栈
 

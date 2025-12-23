@@ -15,7 +15,8 @@
     "optimize-images:force": "rm -rf public/images/optimized && npm run optimize-images",
     "test-image-quality": "node scripts/test-image-quality.js",
     "health-check": "node scripts/health-check.js",
-    "deploy-check": "npm run health-check && npm run build:fast"
+    "deploy-check": "npm run health-check && npm run build:fast",
+    "setup-check": "node scripts/setup-check.js"
   },
   "dependencies": {
     "@notionhq/client": "^5.6.0",
