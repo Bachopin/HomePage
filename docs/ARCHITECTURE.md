@@ -38,7 +38,7 @@ const scale = 1.02; // 魔术数字
 
 | 层级 | 目录 | 职责 | 示例 |
 |------|------|------|------|
-| UI 层 | `components/ui/` | 通用、无业务逻辑、可复用 | `ScrambleText`, `DarkModeToggle` |
+| UI 层 | `components/ui/` | 通用、无业务逻辑、可复用 | `ScrambleText`, `ScrollHint`, `ScrollingText` |
 | 布局层 | `components/layout/` | 全局布局结构 | `Navigation` |
 | 功能层 | `components/features/` | 业务逻辑、特定功能 | `HomeClient`, `MasonryCard` |
 
@@ -96,6 +96,8 @@ export type { UseMyHookProps, UseMyHookResult } from './useMyHook';
 | `DisableContextMenu` | 禁用右键菜单 |
 | `ErrorBoundary` | 错误边界 |
 | `InteractiveList` | 交互列表（悬停显示图片） |
+| `ScrollHint` | 滚动提示组件（鼠标滚轮图标） |
+| `ScrollingText` | 背景滚动大字效果 |
 | `TypedText` | 打字机效果 |
 
 ### Hooks (`hooks/`)
