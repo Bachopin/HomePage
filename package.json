@@ -4,7 +4,8 @@
   "private": true,
   "scripts": {
     "dev": "next dev -p 3456 -H 0.0.0.0",
-    "build": "npm run optimize-images && next build",
+    "build": "next build",
+    "build:with-images": "npm run optimize-images && next build",
     "build:fast": "next build",
     "start": "next start -p 3456",
     "lint": "next lint",

@@ -14,7 +14,23 @@ const fs = require('fs').promises;
 const path = require('path');
 const https = require('https');
 const sharp = require('sharp');
-const { getDatabaseItems } = require('../src/lib/notion');
+
+// 动态导入 ES 模块
+let getDatabaseItems;
+
+async function initializeNotionModule() {
+  try {
+    const notionModule = await import('../src/lib/notion.js');
+    getDatabaseItems = notionModule.getDatabaseItems;
+  } catch (error) {
+    console.error('Failed to import Notion module:', error);
+    // 在构建时提供一个 fallback
+    getDatabaseItems = async () => {
+      console.warn('Notion module not available during build, returning empty array');
+      return [];
+    };
+  }
+}
 
 // ============================================================================
 // 配置
@@ -218,6 +234,9 @@ async function processImagesInBatches(items, batchSize = CONFIG.concurrency) {
 async function main() {
   try {
     console.log('🖼️ Starting image optimization...\n');
+    
+    // 初始化 Notion 模块
+    await initializeNotionModule();
     
     // 检查依赖
     try {
