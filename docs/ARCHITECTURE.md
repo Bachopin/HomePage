@@ -121,6 +121,7 @@ export type { UseMyHookProps, UseMyHookResult } from './useMyHook';
 | `imageService.ts` | 图片优化服务 |
 | `imageConfig.ts` | 图片配置 |
 | `transformers.ts` | 数据转换器 |
+| `faviconGenerator.ts` | 动态 favicon 生成器 |
 
 ### 配置常量 (`lib/config.ts`)
 
@@ -149,3 +150,41 @@ export type { UseMyHookProps, UseMyHookResult } from './useMyHook';
 
 - [部署指南](./DEPLOYMENT_GUIDE.md)
 - [图片优化](./IMAGE_OPTIMIZATION.md)
+
+## 🎨 动态 Favicon 系统
+
+### 架构设计
+
+动态 favicon 系统基于 Notion 数据库图标自动生成多尺寸 favicon 文件：
+
+```
+Notion Database Icon → FaviconGenerator → Multi-size Files
+     ↓                       ↓                    ↓
+  emoji/file/external    Sharp Processing    16x16, 32x32, 192x192, 512x512
+```
+
+### 核心组件
+
+| 组件 | 职责 |
+|------|------|
+| `FaviconGenerator` | 核心生成逻辑，处理不同图标类型 |
+| `generate-favicon.js` | 构建脚本，集成到构建流程 |
+| `DatabaseIcon` 接口 | 类型定义，支持 emoji/external/file |
+
+### 支持的图标类型
+
+1. **Emoji**: 转换为 SVG 再生成 PNG
+2. **External URL**: 下载并处理外部图片
+3. **File Upload**: 处理 Notion 上传的文件
+
+### 错误处理策略
+
+- **多层回退**: Notion图标 → 默认图标 → 最简图标
+- **重试机制**: 网络请求失败时自动重试
+- **构建保护**: 确保构建过程不会因图标问题失败
+
+### 性能优化
+
+- **零额外API调用**: 复用现有 Notion 数据库查询
+- **文件大小控制**: 总计 < 50KB
+- **智能缓存**: 24小时内跳过重复生成

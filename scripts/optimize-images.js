@@ -27,7 +27,7 @@ async function initializeNotionModule() {
     // 在构建时提供一个 fallback
     getDatabaseItems = async () => {
       console.warn('Notion module not available during build, returning empty result');
-      return { title: 'Mextric Homepage', items: [] };
+      return { title: 'Mextric Homepage', items: [], icon: undefined };
     };
   }
 }

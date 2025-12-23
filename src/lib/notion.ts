@@ -13,6 +13,13 @@ export const notion = process.env.NOTION_API_KEY
 
 const DEFAULT_SITE_TITLE = 'Mextric Homepage';
 
+export interface DatabaseIcon {
+  type: 'emoji' | 'external' | 'file';
+  emoji?: string;
+  external?: { url: string };
+  file?: { url: string; expiry_time: string };
+}
+
 export interface NotionItem {
   id: string;
   title: string;
@@ -135,21 +142,76 @@ export async function getCategoryOrder(): Promise<string[]> {
   }
 }
 
+/**
+ * Parse database icon from Notion API response
+ * @param iconData Raw icon data from Notion database
+ * @returns Parsed DatabaseIcon or undefined
+ */
+function parseDatabaseIcon(iconData: any): DatabaseIcon | undefined {
+  if (!iconData || typeof iconData !== 'object') {
+    return undefined;
+  }
+
+  try {
+    switch (iconData.type) {
+      case 'emoji':
+      case 'custom_emoji': // Notion 有时使用 custom_emoji 类型
+        if (iconData.emoji && typeof iconData.emoji === 'string') {
+          return {
+            type: 'emoji',
+            emoji: iconData.emoji,
+          };
+        }
+        break;
+      
+      case 'external':
+        if (iconData.external?.url && typeof iconData.external.url === 'string') {
+          return {
+            type: 'external',
+            external: { url: iconData.external.url },
+          };
+        }
+        break;
+      
+      case 'file':
+        if (iconData.file?.url && typeof iconData.file.url === 'string') {
+          return {
+            type: 'file',
+            file: {
+              url: iconData.file.url,
+              expiry_time: iconData.file.expiry_time || '',
+            },
+          };
+        }
+        break;
+      
+      default:
+        console.warn('[parseDatabaseIcon] Unknown icon type:', iconData.type);
+        break;
+    }
+  } catch (error: any) {
+    console.warn('[parseDatabaseIcon] Error parsing icon data:', error?.message || error);
+  }
+
+  return undefined;
+}
+
 export interface DatabaseWithItems {
   title: string;
   items: NotionItem[];
+  icon?: DatabaseIcon;
 }
 
 export async function getDatabaseItems(): Promise<DatabaseWithItems> {
   if (!process.env.NOTION_DATABASE_ID) {
     console.warn('NOTION_DATABASE_ID is not set, returning empty result');
-    return { title: DEFAULT_SITE_TITLE, items: [] };
+    return { title: DEFAULT_SITE_TITLE, items: [], icon: undefined };
   }
 
   try {
     if (!notion) {
       console.warn('Notion client not initialized');
-      return { title: DEFAULT_SITE_TITLE, items: [] };
+      return { title: DEFAULT_SITE_TITLE, items: [], icon: undefined };
     }
 
     const apiKey = process.env.NOTION_API_KEY!;
@@ -191,19 +253,27 @@ export async function getDatabaseItems(): Promise<DatabaseWithItems> {
       })
     ]);
 
-    // Extract title from database metadata
+    // Extract title and icon from database metadata
     let title = DEFAULT_SITE_TITLE;
+    let icon: DatabaseIcon | undefined = undefined;
     if (databaseResponse.ok) {
       try {
         const database = await databaseResponse.json();
+        
+        // Extract title
         if (database.title && Array.isArray(database.title) && database.title.length > 0) {
           const extractedTitle = database.title.map((t: any) => t.plain_text).join('');
           if (extractedTitle.trim()) {
             title = extractedTitle.trim();
           }
         }
+        
+        // Extract icon
+        if (database.icon) {
+          icon = parseDatabaseIcon(database.icon);
+        }
       } catch (error) {
-        console.warn('Failed to extract database title, using default');
+        console.warn('Failed to extract database metadata, using defaults');
       }
     }
 
@@ -211,7 +281,7 @@ export async function getDatabaseItems(): Promise<DatabaseWithItems> {
     if (!itemsResponse.ok) {
       if (itemsResponse.status === 429) {
         console.warn('Notion API rate limit exceeded (429). Returning empty array.');
-        return { title, items: [] };
+        return { title, items: [], icon };
       }
 
       let errorData: any;
@@ -220,7 +290,7 @@ export async function getDatabaseItems(): Promise<DatabaseWithItems> {
         errorData = JSON.parse(errorText);
       } catch (parseError) {
         console.error('Error parsing Notion API error response:', parseError);
-        return { title, items: [] };
+        return { title, items: [], icon };
       }
       
       // If Status filter fails, try without filter
@@ -247,10 +317,10 @@ export async function getDatabaseItems(): Promise<DatabaseWithItems> {
           if (!fallbackResponse.ok) {
             if (fallbackResponse.status === 429) {
               console.warn('Notion API rate limit exceeded (429) in fallback.');
-              return { title, items: [] };
+              return { title, items: [], icon };
             }
             console.error(`Notion API error in fallback: ${fallbackResponse.status} ${fallbackResponse.statusText}`);
-            return { title, items: [] };
+            return { title, items: [], icon };
           }
           
           const fallbackData = await fallbackResponse.json();
@@ -277,16 +347,17 @@ export async function getDatabaseItems(): Promise<DatabaseWithItems> {
 
           return { 
             title, 
-            items: mappedItems.map(({ item }: { item: NotionItem; pageId: string }) => item) 
+            items: mappedItems.map(({ item }: { item: NotionItem; pageId: string }) => item),
+            icon
           };
         } catch (fallbackError: any) {
           console.error('Network error in fallback fetch:', fallbackError?.message || fallbackError);
-          return { title, items: [] };
+          return { title, items: [], icon };
         }
       }
       
       console.error(`Notion API error: ${itemsResponse.status} ${itemsResponse.statusText}`, errorData);
-      return { title, items: [] };
+      return { title, items: [], icon };
     }
 
     // Parse successful items response
@@ -295,7 +366,7 @@ export async function getDatabaseItems(): Promise<DatabaseWithItems> {
       data = await itemsResponse.json();
     } catch (parseError) {
       console.error('Error parsing Notion API response:', parseError);
-      return { title, items: [] };
+      return { title, items: [], icon };
     }
 
     // Process items
@@ -322,11 +393,12 @@ export async function getDatabaseItems(): Promise<DatabaseWithItems> {
 
     return { 
       title, 
-      items: mappedItems.map(({ item }: { item: NotionItem; pageId: string }) => item) 
+      items: mappedItems.map(({ item }: { item: NotionItem; pageId: string }) => item),
+      icon
     };
   } catch (error: any) {
     console.error('Error fetching Notion database:', error);
-    return { title: DEFAULT_SITE_TITLE, items: [] };
+    return { title: DEFAULT_SITE_TITLE, items: [], icon: undefined };
   }
 }
 

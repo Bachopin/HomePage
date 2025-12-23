@@ -104,8 +104,34 @@ export const METADATA: MetadataConfig = {
 - 格式：PNG 或 JPG
 - 大小：< 1MB
 
-#### 4.2 Favicon（可选）
-替换 `public/favicon.ico` 为你的图标。
+#### 4.2 Favicon（自动生成）
+系统会自动从 Notion 数据库图标生成 favicon：
+
+**支持的图标类型：**
+- **Emoji**: 数据库图标设置为 emoji 时自动转换为 favicon
+- **外部图片**: 支持任何可访问的图片 URL
+- **上传文件**: 支持 Notion 中上传的图片文件
+
+**生成的文件：**
+- `favicon.ico` (32x32)
+- `favicon-16x16.png`
+- `favicon-32x32.png` 
+- `apple-touch-icon.png` (192x192)
+- `android-chrome-512x512.png` (512x512)
+
+**手动生成：**
+```bash
+# 强制重新生成 favicon
+npm run generate-favicon:force
+
+# 查看详细日志
+npm run generate-favicon:force -- --verbose
+```
+
+**注意事项：**
+- 如果数据库没有设置图标，会生成默认的 "M" 字母图标
+- 构建时自动执行，无需手动操作
+- 总文件大小控制在 50KB 以内
 
 ### 5. Vercel 部署
 
