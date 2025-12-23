@@ -11,6 +11,59 @@ export const notion = process.env.NOTION_API_KEY
     })
   : null;
 
+/**
+ * Get database title from Notion
+ * @returns Promise<string> Database title or fallback
+ */
+const DEFAULT_SITE_TITLE = 'Mextric Homepage';
+
+/**
+ * Get database title from Notion
+ * @returns Promise<string> Database title or fallback
+ */
+export async function getDatabaseTitle(): Promise<string> {
+  if (!process.env.NOTION_DATABASE_ID || !process.env.NOTION_API_KEY) {
+    console.warn('[getDatabaseTitle] NOTION_DATABASE_ID or NOTION_API_KEY is not set');
+    return DEFAULT_SITE_TITLE;
+  }
+
+  try {
+    const apiKey = process.env.NOTION_API_KEY!;
+    const databaseId = process.env.NOTION_DATABASE_ID!;
+    
+    const response = await fetch(`https://api.notion.com/v1/databases/${databaseId}`, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Notion-Version': '2022-06-28',
+        'Content-Type': 'application/json',
+      },
+      next: { revalidate: 3600 }, // Cache for 1 hour
+    });
+
+    if (!response.ok) {
+      console.error('[getDatabaseTitle] Failed to fetch database:', response.status);
+      return DEFAULT_SITE_TITLE;
+    }
+
+    const database = await response.json();
+    
+    // Extract title from database
+    // Notion database title is in title array: { title: [{ plain_text: "..." }] }
+    if (database.title && Array.isArray(database.title) && database.title.length > 0) {
+      const title = database.title.map((t: any) => t.plain_text).join('');
+      if (title.trim()) {
+        return title.trim();
+      }
+    }
+
+    return DEFAULT_SITE_TITLE;
+  } catch (error: any) {
+    console.error('[getDatabaseTitle] Error:', error?.message || error);
+    return DEFAULT_SITE_TITLE;
+  }
+}
+
 export interface NotionItem {
   id: string;
   title: string;

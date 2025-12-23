@@ -363,6 +363,7 @@ export default function HomeClient({
                     type={item.type}
                     link={item.link}
                     scrollProgress={springX}
+                    scrollYProgress={isIntro ? scrollYProgress : undefined}
                     cardIndex={index}
                     totalCards={sortedItems.length}
                     cardPosition={position.centerX}

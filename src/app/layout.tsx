@@ -1,11 +1,16 @@
 import type { Metadata } from 'next';
 import './globals.css';
 import { CrosshairToggle, DisableContextMenu } from '@/components/ui';
+import { getDatabaseTitle } from '@/lib/notion';
 
-export const metadata: Metadata = {
-  title: 'Personal Homepage',
-  description: 'Developer and product designer',
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const title = await getDatabaseTitle();
+  
+  return {
+    title,
+    description: 'Developer and product designer',
+  };
+}
 
 export default function RootLayout({
   children,

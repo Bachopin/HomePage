@@ -6,7 +6,7 @@ import { motion, useTransform } from 'framer-motion';
 import { ArrowUpRight } from 'lucide-react';
 import { useParallax, useProgressiveImage } from '@/hooks';
 import type { ImageSize } from '@/hooks';
-import { ScrambleText, ScrollingText } from '@/components/ui';
+import { ScrambleText, ScrollingText, ScrollHint } from '@/components/ui';
 import {
   ANIMATION,
   UI,
@@ -28,6 +28,8 @@ interface MasonryCardProps {
   size: CardSize;
   link?: string;
   scrollProgress?: MotionValue<number>;
+  /** 滚动进度 (0-1)，用于 ScrollHint */
+  scrollYProgress?: MotionValue<number>;
   type?: 'intro' | 'project' | 'outro';
   description?: string;
   cardIndex?: number;
@@ -103,6 +105,7 @@ interface IntroOutroCardProps {
   width: string;
   introScale?: MotionValue<number>;
   outroScale?: MotionValue<number>;
+  scrollYProgress?: MotionValue<number>;
 }
 
 function IntroOutroCard({
@@ -115,8 +118,10 @@ function IntroOutroCard({
   width,
   introScale,
   outroScale,
+  scrollYProgress,
 }: IntroOutroCardProps) {
   const hasLink = Boolean(link && link !== '#');
+  const isIntro = Boolean(introScale);
 
   const CardWrapper = hasLink ? 'a' : 'div';
   const wrapperProps = hasLink
@@ -142,7 +147,7 @@ function IntroOutroCard({
 
   return (
     <motion.div
-      className={`group relative overflow-hidden bg-black dark:bg-white ${hasLink ? 'cursor-pointer' : 'cursor-default'} ${absolutePosition ? '' : gridArea}`}
+      className={`group relative overflow-visible bg-black dark:bg-white ${hasLink ? 'cursor-pointer' : 'cursor-default'} ${absolutePosition ? '' : gridArea}`}
       style={{
         ...positionStyle,
         borderRadius: UI.cardBorderRadius,
@@ -152,10 +157,15 @@ function IntroOutroCard({
       whileHover={{ scale: cardScale ? undefined : ANIMATION.cardHoverScale }}
       transition={{ duration: ANIMATION.hoverDuration }}
     >
+      {/* Scroll Hint - 只在 Intro 卡片上方显示 */}
+      {isIntro && scrollYProgress && (
+        <ScrollHint scrollProgress={scrollYProgress} />
+      )}
+      
       <CardWrapper {...wrapperProps} className="block w-full h-full">
         <IntroOutroLinkIndicator visible={hasLink} />
         
-        <div className="w-full h-full flex flex-col justify-center items-center p-8 text-white dark:text-black">
+        <div className="w-full h-full flex flex-col justify-center items-center p-8 text-white dark:text-black overflow-hidden" style={{ borderRadius: UI.cardBorderRadius }}>
           {year && (
             <span className="text-xs font-mono opacity-60 text-white/60 dark:text-black/60 mb-4">
               {year}
@@ -437,6 +447,7 @@ export default function MasonryCard({
   size,
   link = '#',
   scrollProgress,
+  scrollYProgress,
   type = 'project',
   description,
   cardPosition,
@@ -524,6 +535,7 @@ export default function MasonryCard({
         width={widthStyle}
         introScale={introScale}
         outroScale={outroScale}
+        scrollYProgress={scrollYProgress}
       />
     );
   }
