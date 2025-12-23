@@ -257,7 +257,7 @@ export interface MetadataConfig {
 
 export const METADATA: MetadataConfig = {
   title: 'Personal Homepage',
-  description: 'Developer and product designer portfolio showcasing creative works, projects, and experiments.',
+  description: 'Creative developer and designer portfolio featuring innovative projects and experiments.',
   keywords: [
     'portfolio',
     'developer',
@@ -287,13 +287,13 @@ export const METADATA: MetadataConfig = {
     'Notion',
     'API',
   ],
-  author: 'Bachopin',
-  siteUrl: 'https://bachopin.com',
+  author: 'Mextric',
+  siteUrl: 'https://mextric.vercel.app',
   ogImage: '/og-image.png',
   openGraph: {
     type: 'website',
-    locale: 'zh_CN',
-    siteName: 'Personal Homepage',
+    locale: 'en_US',
+    siteName: 'Mextric',
   },
   twitter: {
     card: 'summary_large_image',
