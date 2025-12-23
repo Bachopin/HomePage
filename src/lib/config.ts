@@ -243,6 +243,7 @@ export interface MetadataConfig {
   keywords: string[];
   author: string;
   siteUrl: string;
+  ogImage: string;
   openGraph: {
     type: string;
     locale: string;
@@ -264,9 +265,30 @@ export const METADATA: MetadataConfig = {
     'projects',
     'web development',
     'product design',
+    '作品集',
+    '开发者',
+    '设计师',
+    '创意',
+    '项目',
+    'React',
+    'Next.js',
+    'TypeScript',
+    'JavaScript',
+    'CSS',
+    'HTML',
+    'UI/UX',
+    'frontend',
+    'fullstack',
+    '前端开发',
+    '全栈开发',
+    '产品设计',
+    '交互设计',
+    'Notion',
+    'API',
   ],
   author: 'Bachopin',
   siteUrl: 'https://bachopin.com',
+  ogImage: '/og-image.png',
   openGraph: {
     type: 'website',
     locale: 'zh_CN',

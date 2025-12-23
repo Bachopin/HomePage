@@ -21,11 +21,23 @@ export const metadata: Metadata = {
     locale: METADATA.openGraph.locale,
     siteName: METADATA.openGraph.siteName,
     url: METADATA.siteUrl,
+    images: [
+      {
+        url: `${METADATA.siteUrl}${METADATA.ogImage}`,
+        width: 1200,
+        height: 630,
+        alt: METADATA.title,
+      },
+    ],
   },
   twitter: {
     card: METADATA.twitter.card as 'summary_large_image',
     title: METADATA.title,
     description: METADATA.description,
+    images: [`${METADATA.siteUrl}${METADATA.ogImage}`],
+  },
+  alternates: {
+    canonical: METADATA.siteUrl,
   },
   metadataBase: new URL(METADATA.siteUrl),
 };
@@ -74,6 +86,30 @@ export default async function Home() {
     // 4. Render
     return (
       <ErrorBoundary>
+        {/* JSON-LD 结构化数据 */}
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify({
+              '@context': 'https://schema.org',
+              '@type': 'Person',
+              name: METADATA.author,
+              url: METADATA.siteUrl,
+              description: METADATA.description,
+              jobTitle: 'Developer & Product Designer',
+              knowsAbout: [
+                'Web Development',
+                'Product Design',
+                'React',
+                'Next.js',
+                'TypeScript',
+                'JavaScript',
+                'UI/UX Design',
+              ],
+              sameAs: [METADATA.siteUrl],
+            }),
+          }}
+        />
         <HomeClient items={items} categories={categories} />
       </ErrorBoundary>
     );
