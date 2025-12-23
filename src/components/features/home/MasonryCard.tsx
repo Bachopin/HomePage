@@ -6,7 +6,7 @@ import { motion } from 'framer-motion';
 import { ArrowUpRight } from 'lucide-react';
 import { useParallax, useProgressiveImage } from '@/hooks';
 import type { ImageSize } from '@/hooks';
-import { ScrambleText } from '@/components/ui';
+import { ScrambleText, ScrollingText } from '@/components/ui';
 import {
   ANIMATION,
   UI,
@@ -342,7 +342,7 @@ function ProjectCardTextOverlay({
 }
 
 // ============================================================================
-// Text Card Content - 纯文字卡片（带 Scramble 效果）
+// Text Card Content - 纯文字卡片（带 Scramble 效果 + 背景滚动大字）
 // ============================================================================
 
 interface TextCardContentProps {
@@ -351,6 +351,9 @@ interface TextCardContentProps {
   description?: string;
   size: CardSize;
   scrambleTrigger?: number;
+  scrollProgress?: MotionValue<number>;
+  cardPosition?: number;
+  viewportWidth?: number;
 }
 
 function TextCardContent({
@@ -359,54 +362,57 @@ function TextCardContent({
   description,
   size,
   scrambleTrigger,
+  scrollProgress,
+  cardPosition = 0,
+  viewportWidth = 1920,
 }: TextCardContentProps) {
   const [isHovered, setIsHovered] = useState(false);
   
-  // 根据卡片尺寸调整
   const isLarge = size === '2x2' || size === '2x1';
   const isTall = size === '1x2' || size === '2x2';
+  const bgText = title || year || '';
 
   return (
     <div 
-      className="absolute inset-0 flex items-center justify-center"
+      className="absolute inset-0 flex items-center justify-center overflow-hidden"
+      style={{ containerType: 'size' }}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
     >
-      <div className="text-center px-6">
-        {/* Year - 带 scramble 效果 */}
+      {/* 背景滚动大字 */}
+      {bgText && (
+        <ScrollingText
+          text={bgText}
+          size={size}
+          scrollProgress={scrollProgress}
+          cardPosition={cardPosition}
+          viewportWidth={viewportWidth}
+        />
+      )}
+
+      {/* 前景文字内容 */}
+      <div className="text-center px-6 z-10 relative">
         {year && (
           <ScrambleText
             text={year}
             as="span"
-            className={`
-              font-mono text-neutral-500 dark:text-neutral-400 mb-3 block
-              ${isLarge ? 'text-sm' : 'text-xs'}
-            `}
+            className={`font-mono text-neutral-500 dark:text-neutral-400 mb-3 block ${isLarge ? 'text-sm' : 'text-xs'}`}
             triggerReplay={scrambleTrigger}
           />
         )}
         
-        {/* Title - 带 scramble 效果 */}
         {title && (
           <ScrambleText
             text={title}
             as="h3"
-            className={`
-              font-semibold text-neutral-700 dark:text-neutral-200 mb-2
-              ${isLarge ? 'text-xl md:text-2xl' : 'text-lg'}
-            `}
+            className={`font-semibold text-neutral-700 dark:text-neutral-200 mb-2 ${isLarge ? 'text-xl md:text-2xl' : 'text-lg'}`}
             triggerReplay={scrambleTrigger}
           />
         )}
         
-        {/* Description - 悬停时显示 */}
         {description && (
           <p 
-            className={`
-              text-neutral-500 dark:text-neutral-400 transition-all duration-300
-              ${isLarge ? 'text-sm' : 'text-xs'}
-              ${isTall ? 'line-clamp-4' : 'line-clamp-2'}
-            `}
+            className={`text-neutral-500 dark:text-neutral-400 transition-all duration-300 ${isLarge ? 'text-sm' : 'text-xs'} ${isTall ? 'line-clamp-4' : 'line-clamp-2'}`}
             style={{
               opacity: isHovered ? 0.9 : 0,
               transform: isHovered ? 'translateY(0)' : 'translateY(8px)',
@@ -603,6 +609,9 @@ export default function MasonryCard({
               description={description}
               size={size}
               scrambleTrigger={scrambleTrigger}
+              scrollProgress={scrollProgress}
+              cardPosition={cardPosition}
+              viewportWidth={viewportWidth}
             />
           )}
 

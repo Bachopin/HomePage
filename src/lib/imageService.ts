@@ -287,16 +287,16 @@ export async function preloadCriticalImages(
   options: ImageServiceOptions = {}
 ): Promise<void> {
   const preloadPromises = imageUrls.slice(0, 6).map(async (url, index) => {
-    const optimizedUrl = await getOptimizedImageUrl(url, {
+    const result = await getOptimizedImageUrl(url, {
       ...options,
       viewportWidth: options.viewportWidth || 800, // 假设中等尺寸
     });
     
-    if (optimizedUrl && typeof document !== 'undefined') {
+    if (result.primary && typeof document !== 'undefined') {
       const link = document.createElement('link');
       link.rel = 'preload';
       link.as = 'image';
-      link.href = optimizedUrl;
+      link.href = result.primary;
       
       // 前3张设置高优先级
       if (index < 3) {

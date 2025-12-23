@@ -10,4 +10,5 @@ export { default as DisableContextMenu } from './DisableContextMenu';
 export { default as ErrorBoundary } from './ErrorBoundary';
 export { default as InteractiveList } from './InteractiveList';
 export { default as ScrambleText } from './ScrambleText';
+export { default as ScrollingText } from './ScrollingText';
 export { default as TypedText } from './TypedText';
