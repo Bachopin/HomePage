@@ -39,3 +39,6 @@ next-env.d.ts
 # optimized images (generated during build)
 /public/images/optimized/
 
+# Kiro IDE files
+.kiro/
+
