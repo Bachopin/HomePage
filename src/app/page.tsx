@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import { getDatabaseItems, getCategoryOrder, getDatabaseTitle } from '@/lib/notion';
+import { getDatabaseItems, getCategoryOrder } from '@/lib/notion';
 import { processHomePageItems } from '@/lib/transformers';
 import { METADATA } from '@/lib/config';
 import { HomeClient } from '@/components/features/home';
@@ -10,7 +10,7 @@ import { ErrorBoundary } from '@/components/ui';
 // ============================================================================
 
 export async function generateMetadata(): Promise<Metadata> {
-  const title = await getDatabaseTitle();
+  const { title } = await getDatabaseItems();
   
   return {
     title,
@@ -59,8 +59,8 @@ export const revalidate = 36;
 
 export default async function Home() {
   try {
-    // 1. Fetch raw data
-    const [rawData, categoryOrder] = await Promise.all([
+    // 1. Fetch raw data (now includes title)
+    const [{ items: rawData, title }, categoryOrder] = await Promise.all([
       getDatabaseItems(),
       getCategoryOrder(),
     ]);

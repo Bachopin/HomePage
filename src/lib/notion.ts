@@ -11,58 +11,7 @@ export const notion = process.env.NOTION_API_KEY
     })
   : null;
 
-/**
- * Get database title from Notion
- * @returns Promise<string> Database title or fallback
- */
 const DEFAULT_SITE_TITLE = 'Mextric Homepage';
-
-/**
- * Get database title from Notion
- * @returns Promise<string> Database title or fallback
- */
-export async function getDatabaseTitle(): Promise<string> {
-  if (!process.env.NOTION_DATABASE_ID || !process.env.NOTION_API_KEY) {
-    console.warn('[getDatabaseTitle] NOTION_DATABASE_ID or NOTION_API_KEY is not set');
-    return DEFAULT_SITE_TITLE;
-  }
-
-  try {
-    const apiKey = process.env.NOTION_API_KEY!;
-    const databaseId = process.env.NOTION_DATABASE_ID!;
-    
-    const response = await fetch(`https://api.notion.com/v1/databases/${databaseId}`, {
-      method: 'GET',
-      headers: {
-        'Authorization': `Bearer ${apiKey}`,
-        'Notion-Version': '2022-06-28',
-        'Content-Type': 'application/json',
-      },
-      next: { revalidate: 3600 }, // Cache for 1 hour
-    });
-
-    if (!response.ok) {
-      console.error('[getDatabaseTitle] Failed to fetch database:', response.status);
-      return DEFAULT_SITE_TITLE;
-    }
-
-    const database = await response.json();
-    
-    // Extract title from database
-    // Notion database title is in title array: { title: [{ plain_text: "..." }] }
-    if (database.title && Array.isArray(database.title) && database.title.length > 0) {
-      const title = database.title.map((t: any) => t.plain_text).join('');
-      if (title.trim()) {
-        return title.trim();
-      }
-    }
-
-    return DEFAULT_SITE_TITLE;
-  } catch (error: any) {
-    console.error('[getDatabaseTitle] Error:', error?.message || error);
-    return DEFAULT_SITE_TITLE;
-  }
-}
 
 export interface NotionItem {
   id: string;
@@ -186,78 +135,99 @@ export async function getCategoryOrder(): Promise<string[]> {
   }
 }
 
-export async function getDatabaseItems(): Promise<NotionItem[]> {
+export interface DatabaseWithItems {
+  title: string;
+  items: NotionItem[];
+}
+
+export async function getDatabaseItems(): Promise<DatabaseWithItems> {
   if (!process.env.NOTION_DATABASE_ID) {
-    console.warn('NOTION_DATABASE_ID is not set, returning empty array');
-    return [];
+    console.warn('NOTION_DATABASE_ID is not set, returning empty result');
+    return { title: DEFAULT_SITE_TITLE, items: [] };
   }
 
   try {
     if (!notion) {
       console.warn('Notion client not initialized');
-      return [];
+      return { title: DEFAULT_SITE_TITLE, items: [] };
     }
 
-    // Build query with filters and sorting
     const apiKey = process.env.NOTION_API_KEY!;
     const databaseId = process.env.NOTION_DATABASE_ID!;
     
-    // Build request body with filter and sorting
-    const requestBody: any = {
-      filter: {
-        property: 'Status',
-        select: {
-          equals: 'Live',
+    // 1. Get database info (for title) and items in parallel
+    const [databaseResponse, itemsResponse] = await Promise.all([
+      // Database metadata
+      fetch(`https://api.notion.com/v1/databases/${databaseId}`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'Notion-Version': '2022-06-28',
+          'Content-Type': 'application/json',
         },
-      },
-      sorts: [
-        {
-          timestamp: 'created_time',
-          direction: 'ascending',
-        },
-      ],
-    };
-
-    // Query database using direct HTTP request
-    let response: Response;
-    try {
-      response = await fetch(`https://api.notion.com/v1/databases/${databaseId}/query`, {
+      }),
+      // Database items
+      fetch(`https://api.notion.com/v1/databases/${databaseId}/query`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${apiKey}`,
           'Notion-Version': '2022-06-28',
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(requestBody),
-      });
-    } catch (fetchError: any) {
-      console.error('Network error fetching from Notion API:', fetchError?.message || fetchError);
-      return []; // Return empty array instead of crashing
+        body: JSON.stringify({
+          filter: {
+            property: 'Status',
+            select: {
+              equals: 'Live',
+            },
+          },
+          sorts: [
+            {
+              timestamp: 'created_time',
+              direction: 'ascending',
+            },
+          ],
+        }),
+      })
+    ]);
+
+    // Extract title from database metadata
+    let title = DEFAULT_SITE_TITLE;
+    if (databaseResponse.ok) {
+      try {
+        const database = await databaseResponse.json();
+        if (database.title && Array.isArray(database.title) && database.title.length > 0) {
+          const extractedTitle = database.title.map((t: any) => t.plain_text).join('');
+          if (extractedTitle.trim()) {
+            title = extractedTitle.trim();
+          }
+        }
+      } catch (error) {
+        console.warn('Failed to extract database title, using default');
+      }
     }
 
-    if (!response.ok) {
-      // Handle rate limiting (429) gracefully
-      if (response.status === 429) {
-        console.warn('Notion API rate limit exceeded (429). Returning empty array. Will retry on next revalidation.');
-        return []; // Return empty array instead of crashing
+    // Handle items response
+    if (!itemsResponse.ok) {
+      if (itemsResponse.status === 429) {
+        console.warn('Notion API rate limit exceeded (429). Returning empty array.');
+        return { title, items: [] };
       }
 
-      let errorText: string;
       let errorData: any;
       try {
-        errorText = await response.text();
+        const errorText = await itemsResponse.text();
         errorData = JSON.parse(errorText);
       } catch (parseError) {
         console.error('Error parsing Notion API error response:', parseError);
-        return []; // Return empty array if we can't parse the error
+        return { title, items: [] };
       }
       
       // If Status filter fails, try without filter
       if (errorData.code === 'validation_error' && errorData.message?.includes('Status')) {
         console.warn('Status filter failed, trying without filter:', errorData.message);
-        let fallbackResponse: Response;
         try {
-          fallbackResponse = await fetch(`https://api.notion.com/v1/databases/${databaseId}/query`, {
+          const fallbackResponse = await fetch(`https://api.notion.com/v1/databases/${databaseId}/query`, {
             method: 'POST',
             headers: {
               'Authorization': `Bearer ${apiKey}`,
@@ -265,114 +235,98 @@ export async function getDatabaseItems(): Promise<NotionItem[]> {
               'Content-Type': 'application/json',
             },
             body: JSON.stringify({
-              sorts: requestBody.sorts,
+              sorts: [
+                {
+                  timestamp: 'created_time',
+                  direction: 'ascending',
+                },
+              ],
             }),
           });
-        } catch (fallbackFetchError: any) {
-          console.error('Network error in fallback fetch:', fallbackFetchError?.message || fallbackFetchError);
-          return []; // Return empty array instead of crashing
-        }
-        
-        if (!fallbackResponse.ok) {
-          if (fallbackResponse.status === 429) {
-            console.warn('Notion API rate limit exceeded (429) in fallback. Returning empty array.');
-            return [];
+          
+          if (!fallbackResponse.ok) {
+            if (fallbackResponse.status === 429) {
+              console.warn('Notion API rate limit exceeded (429) in fallback.');
+              return { title, items: [] };
+            }
+            console.error(`Notion API error in fallback: ${fallbackResponse.status} ${fallbackResponse.statusText}`);
+            return { title, items: [] };
           }
-          console.error(`Notion API error in fallback: ${fallbackResponse.status} ${fallbackResponse.statusText}`);
-          return []; // Return empty array instead of crashing
-        }
-        
-        let fallbackData: any;
-        try {
-          fallbackData = await fallbackResponse.json();
-        } catch (fallbackParseError) {
-          console.error('Error parsing fallback response:', fallbackParseError);
-          return []; // Return empty array if we can't parse
-        }
-        
-        // Step 1: Parse all items first (no API calls)
-        const mappedItems = fallbackData.results.map((page: any) => {
-          return {
+          
+          const fallbackData = await fallbackResponse.json();
+          const mappedItems = fallbackData.results.map((page: any) => ({
             item: mapPageToItem(page),
             pageId: page.id,
+          }));
+
+          // Update Debug fields
+          const updatePromises = mappedItems.map(({ item, pageId }: { item: NotionItem; pageId: string }) => {
+            if (!item.isValid && item.validationError) {
+              return updateNotionDebugField(pageId, item.validationError);
+            } else {
+              return updateNotionDebugField(pageId, null);
+            }
+          });
+
+          await Promise.allSettled(updatePromises).then((results) => {
+            const failures = results.filter(result => result.status === 'rejected');
+            if (failures.length > 0) {
+              console.warn(`Failed to update Debug field for ${failures.length} page(s) in fallback.`);
+            }
+          });
+
+          return { 
+            title, 
+            items: mappedItems.map(({ item }: { item: NotionItem; pageId: string }) => item) 
           };
-        });
-
-        // Step 2: Extract update promises for Debug field
-        const updatePromises = mappedItems.map(({ item, pageId }: { item: NotionItem; pageId: string }) => {
-          if (!item.isValid && item.validationError) {
-            // Write error to Debug field
-            return updateNotionDebugField(pageId, item.validationError);
-          } else {
-            // Clear Debug field if item is valid
-            return updateNotionDebugField(pageId, null);
-          }
-        });
-
-        // Step 3: Execute all Debug field updates concurrently using Promise.allSettled
-        await Promise.allSettled(updatePromises).then((results) => {
-          const failures = results.filter(result => result.status === 'rejected');
-          if (failures.length > 0) {
-            console.warn(`Failed to update Debug field for ${failures.length} page(s) in fallback. This is non-critical.`);
-          }
-        });
-
-        // Step 4: Return only the items
-        return mappedItems.map(({ item }: { item: NotionItem; pageId: string }) => item);
+        } catch (fallbackError: any) {
+          console.error('Network error in fallback fetch:', fallbackError?.message || fallbackError);
+          return { title, items: [] };
+        }
       }
       
-      // For other errors, log and return empty array
-      console.error(`Notion API error: ${response.status} ${response.statusText}`, errorData);
-      return []; // Return empty array instead of crashing
+      console.error(`Notion API error: ${itemsResponse.status} ${itemsResponse.statusText}`, errorData);
+      return { title, items: [] };
     }
 
+    // Parse successful items response
     let data: any;
     try {
-      data = await response.json();
+      data = await itemsResponse.json();
     } catch (parseError) {
       console.error('Error parsing Notion API response:', parseError);
-      return []; // Return empty array if we can't parse the response
+      return { title, items: [] };
     }
 
-    // Step 1: Parse all items first (no API calls)
-    const mappedItems = data.results.map((page: any) => {
-      return {
-        item: mapPageToItem(page),
-        pageId: page.id,
-      };
-    });
+    // Process items
+    const mappedItems = data.results.map((page: any) => ({
+      item: mapPageToItem(page),
+      pageId: page.id,
+    }));
 
-    // Step 2: Extract update promises for Debug field
+    // Update Debug fields
     const updatePromises = mappedItems.map(({ item, pageId }: { item: NotionItem; pageId: string }) => {
       if (!item.isValid && item.validationError) {
-        // Write error to Debug field
         return updateNotionDebugField(pageId, item.validationError);
       } else {
-        // Clear Debug field if item is valid
         return updateNotionDebugField(pageId, null);
       }
     });
 
-    // Step 3: Execute all Debug field updates concurrently using Promise.allSettled
-    // This ensures that even if some API calls fail (e.g., rate limits), 
-    // we still return the parsed items
     await Promise.allSettled(updatePromises).then((results) => {
       const failures = results.filter(result => result.status === 'rejected');
       if (failures.length > 0) {
-        console.warn(`Failed to update Debug field for ${failures.length} page(s). This is non-critical.`);
+        console.warn(`Failed to update Debug field for ${failures.length} page(s).`);
       }
     });
 
-    // Step 4: Return only the items
-    return mappedItems.map(({ item }: { item: NotionItem; pageId: string }) => item);
+    return { 
+      title, 
+      items: mappedItems.map(({ item }: { item: NotionItem; pageId: string }) => item) 
+    };
   } catch (error: any) {
     console.error('Error fetching Notion database:', error);
-    console.error('Error details:', {
-      message: error?.message,
-      code: error?.code,
-      status: error?.status,
-    });
-    return [];
+    return { title: DEFAULT_SITE_TITLE, items: [] };
   }
 }
 

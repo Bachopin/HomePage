@@ -43,7 +43,7 @@ async function getRefreshedImageUrl(originalUrl: string): Promise<string> {
 
   try {
     // 重新获取 Notion 数据以刷新 URL
-    const items = await getDatabaseItems();
+    const { items } = await getDatabaseItems();
     const item = items.find(item => item.image === originalUrl);
     
     if (item && item.image) {

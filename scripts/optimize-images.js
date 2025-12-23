@@ -26,8 +26,8 @@ async function initializeNotionModule() {
     console.error('Failed to import Notion module:', error);
     // 在构建时提供一个 fallback
     getDatabaseItems = async () => {
-      console.warn('Notion module not available during build, returning empty array');
-      return [];
+      console.warn('Notion module not available during build, returning empty result');
+      return { title: 'Mextric Homepage', items: [] };
     };
   }
 }
@@ -252,7 +252,7 @@ async function main() {
     
     // 获取 Notion 数据
     console.log('📡 Fetching data from Notion...');
-    const items = await getDatabaseItems();
+    const { items } = await getDatabaseItems();
     const imageItems = items.filter(item => item.image && item.image.trim() !== '');
     
     console.log(`Found ${imageItems.length} items with images\n`);
