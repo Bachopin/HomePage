@@ -155,11 +155,23 @@ function parseDatabaseIcon(iconData: any): DatabaseIcon | undefined {
   try {
     switch (iconData.type) {
       case 'emoji':
-      case 'custom_emoji': // Notion 有时使用 custom_emoji 类型
         if (iconData.emoji && typeof iconData.emoji === 'string') {
           return {
             type: 'emoji',
             emoji: iconData.emoji,
+          };
+        }
+        break;
+      
+      case 'custom_emoji':
+        // 处理自定义 emoji（实际上是图片文件）
+        if (iconData.custom_emoji?.url && typeof iconData.custom_emoji.url === 'string') {
+          return {
+            type: 'file',
+            file: {
+              url: iconData.custom_emoji.url,
+              expiry_time: '',
+            },
           };
         }
         break;

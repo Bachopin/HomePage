@@ -12,6 +12,9 @@
 
 const path = require('path');
 
+// 加载环境变量
+require('dotenv').config();
+
 // 使用 ts-node 或直接执行 TypeScript 模块的方法
 let getDatabaseItems, generateFaviconSafe;
 
@@ -225,11 +228,23 @@ function parseDatabaseIcon(iconData) {
   try {
     switch (iconData.type) {
       case 'emoji':
-      case 'custom_emoji':
         if (iconData.emoji && typeof iconData.emoji === 'string') {
           return {
             type: 'emoji',
             emoji: iconData.emoji,
+          };
+        }
+        break;
+      
+      case 'custom_emoji':
+        // 处理自定义 emoji（实际上是图片文件）
+        if (iconData.custom_emoji?.url && typeof iconData.custom_emoji.url === 'string') {
+          return {
+            type: 'file',
+            file: {
+              url: iconData.custom_emoji.url,
+              expiry_time: '',
+            },
           };
         }
         break;
