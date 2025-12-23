@@ -256,9 +256,28 @@ export interface MetadataConfig {
 }
 
 export const METADATA: MetadataConfig = {
-  title: 'Personal Homepage',
-  description: 'Creative developer and designer portfolio featuring innovative projects and experiments.',
+  // 浏览器标签页标题
+  title: 'Mextric - 注意力金融化观察者',
+  // 搜索引擎结果中的描述（非常重要）
+  description: 'Mextric，加密货币交易者、投研玩家。专注注意力金融化框架、链上Alpha猎手、Binance Alpha&Perp看板工具作者。每日加密日报、深度长文输出，观点尖锐且独立。DYOR & NFA。',
+  // 关键词，帮助搜索引擎定位你的网站
   keywords: [
+    'Mextric',
+    '加密货币',
+    '注意力金融化',
+    '链上Alpha',
+    'Binance Alpha',
+    '加密日报',
+    'crypto trader',
+    'web3',
+    'AI crypto',
+    'meme coin',
+    '区块链',
+    'cryptocurrency',
+    'blockchain',
+    'DeFi',
+    'trading',
+    'crypto analysis',
     'portfolio',
     'developer',
     'designer',
@@ -287,14 +306,19 @@ export const METADATA: MetadataConfig = {
     'Notion',
     'API',
   ],
+  // 作者名
   author: 'Mextric',
+  // 你的网站域名
   siteUrl: 'https://mextric.vercel.app',
+  // OG 图片路径
   ogImage: '/og-image.png',
+  // 社交媒体分享配置 (Open Graph)
   openGraph: {
     type: 'website',
-    locale: 'en_US',
-    siteName: 'Mextric',
+    locale: 'zh_CN',
+    siteName: 'Mextric 的个人宇宙',
   },
+  // 推特分享卡片配置
   twitter: {
     card: 'summary_large_image',
   },
