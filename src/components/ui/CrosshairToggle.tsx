@@ -36,25 +36,21 @@ export default function CrosshairToggle() {
     >
       <motion.button
         onClick={toggleDarkMode}
-        className="relative pointer-events-auto cursor-pointer group"
+        className="text-black dark:text-white pointer-events-auto cursor-pointer"
         whileHover={{ scale: 1.1, rotate: 90 }}
         whileTap={{ scale: 0.95 }}
         transition={{ duration: ANIMATION.hoverDuration }}
         aria-label="Toggle dark mode"
       >
-        {/* 背景圆圈增强对比度 */}
-        <div className="absolute inset-0 w-8 h-8 -m-2 bg-white/80 dark:bg-black/80 rounded-full backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-opacity duration-200" />
-        
         <svg
           width="24"
           height="24"
           viewBox="0 0 24 24"
           fill="none"
           stroke="currentColor"
-          strokeWidth="2"
+          strokeWidth="1.5"
           strokeLinecap="round"
           strokeLinejoin="round"
-          className="relative z-10 text-neutral-800 dark:text-neutral-200 drop-shadow-sm"
         >
           <line x1="12" y1="2" x2="12" y2="22" />
           <line x1="2" y1="12" x2="22" y2="12" />

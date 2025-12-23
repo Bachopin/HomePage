@@ -38,8 +38,7 @@ export async function getDatabaseTitle(): Promise<string> {
         'Notion-Version': '2022-06-28',
         'Content-Type': 'application/json',
       },
-      next: { revalidate: 0 }, // Force fresh data for title
-    });
+      next: { revalidate: 3600 }, // Cache for 1 hour
     });
 
     if (!response.ok) {

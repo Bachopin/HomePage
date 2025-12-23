@@ -32,7 +32,7 @@ export default function ScrollHint({
 
   return (
     <motion.div
-      className={`absolute -top-12 left-1/2 -translate-x-1/2 flex flex-col items-center pointer-events-none ${className}`}
+      className={`absolute -bottom-12 left-1/2 -translate-x-1/2 flex flex-col items-center pointer-events-none ${className}`}
       style={{ opacity }}
     >
       {/* 鼠标滚轮图标 */}

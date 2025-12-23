@@ -1,46 +1,50 @@
 import type { Metadata } from 'next';
-import { getDatabaseItems, getCategoryOrder } from '@/lib/notion';
+import { getDatabaseItems, getCategoryOrder, getDatabaseTitle } from '@/lib/notion';
 import { processHomePageItems } from '@/lib/transformers';
 import { METADATA } from '@/lib/config';
 import { HomeClient } from '@/components/features/home';
 import { ErrorBoundary } from '@/components/ui';
 
 // ============================================================================
-// SEO Metadata
+// SEO Metadata - Dynamic title from Notion
 // ============================================================================
 
-export const metadata: Metadata = {
-  title: METADATA.title,
-  description: METADATA.description,
-  keywords: METADATA.keywords,
-  authors: [{ name: METADATA.author }],
-  openGraph: {
-    title: METADATA.title,
+export async function generateMetadata(): Promise<Metadata> {
+  const title = await getDatabaseTitle();
+  
+  return {
+    title,
     description: METADATA.description,
-    type: METADATA.openGraph.type as 'website',
-    locale: METADATA.openGraph.locale,
-    siteName: METADATA.openGraph.siteName,
-    url: METADATA.siteUrl,
-    images: [
-      {
-        url: `${METADATA.siteUrl}${METADATA.ogImage}`,
-        width: 1200,
-        height: 630,
-        alt: METADATA.title,
-      },
-    ],
-  },
-  twitter: {
-    card: METADATA.twitter.card as 'summary_large_image',
-    title: METADATA.title,
-    description: METADATA.description,
-    images: [`${METADATA.siteUrl}${METADATA.ogImage}`],
-  },
-  alternates: {
-    canonical: METADATA.siteUrl,
-  },
-  metadataBase: new URL(METADATA.siteUrl),
-};
+    keywords: METADATA.keywords,
+    authors: [{ name: METADATA.author }],
+    openGraph: {
+      title,
+      description: METADATA.description,
+      type: METADATA.openGraph.type as 'website',
+      locale: METADATA.openGraph.locale,
+      siteName: title,
+      url: METADATA.siteUrl,
+      images: [
+        {
+          url: `${METADATA.siteUrl}${METADATA.ogImage}`,
+          width: 1200,
+          height: 630,
+          alt: title,
+        },
+      ],
+    },
+    twitter: {
+      card: METADATA.twitter.card as 'summary_large_image',
+      title,
+      description: METADATA.description,
+      images: [`${METADATA.siteUrl}${METADATA.ogImage}`],
+    },
+    alternates: {
+      canonical: METADATA.siteUrl,
+    },
+    metadataBase: new URL(METADATA.siteUrl),
+  };
+}
 
 // ============================================================================
 // ISR Configuration
