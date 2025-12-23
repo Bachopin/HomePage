@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import type { MotionValue } from 'framer-motion';
-import { motion } from 'framer-motion';
+import { motion, useTransform } from 'framer-motion';
 import { ArrowUpRight } from 'lucide-react';
 import { useParallax, useProgressiveImage } from '@/hooks';
 import type { ImageSize } from '@/hooks';
@@ -554,6 +554,12 @@ export default function MasonryCard({
   // 完全空白的卡片（无图片且无内容）应该透明
   const isEmptyPlaceholder = shouldShowAsTextCard && !hasContent;
 
+  // 当卡片透明度为0时禁用点击
+  const pointerEvents = useTransform(
+    cardOpacity || { get: () => 1 } as MotionValue<number>,
+    (opacity: number) => opacity < 0.1 ? 'none' : 'auto'
+  );
+
   return (
     <motion.div
       className={`group relative overflow-hidden ${isEmptyPlaceholder ? 'bg-transparent' : 'bg-neutral-200 dark:bg-neutral-800'} ${hasLink ? 'cursor-pointer' : 'cursor-default'} ${absolutePosition ? '' : gridAreaClass}`}
@@ -561,6 +567,7 @@ export default function MasonryCard({
         ...positionStyle,
         borderRadius: isEmptyPlaceholder ? 0 : UI.cardBorderRadius,
         opacity: cardOpacity,
+        pointerEvents: cardOpacity ? pointerEvents : 'auto',
       }}
       whileHover={isEmptyPlaceholder ? undefined : { scale: ANIMATION.cardHoverScale }}
       transition={{ duration: ANIMATION.hoverDuration }}

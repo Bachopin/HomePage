@@ -13,8 +13,80 @@
 const fs = require('fs').promises;
 const path = require('path');
 const https = require('https');
+const http = require('http');
 const sharp = require('sharp');
-const { getDatabaseItems } = require('../src/lib/notion');
+
+// 加载环境变量
+require('dotenv').config();
+
+const NOTION_API_KEY = process.env.NOTION_API_KEY;
+const NOTION_DATABASE_ID = process.env.NOTION_DATABASE_ID;
+
+/**
+ * 从 Notion 获取数据库项目
+ */
+async function getDatabaseItems() {
+  if (!NOTION_DATABASE_ID || !NOTION_API_KEY) {
+    throw new Error('NOTION_DATABASE_ID or NOTION_API_KEY is not set');
+  }
+
+  const items = [];
+  let cursor = undefined;
+
+  do {
+    const body = {
+      page_size: 100,
+    };
+    if (cursor) {
+      body.start_cursor = cursor;
+    }
+
+    const response = await fetch(`https://api.notion.com/v1/databases/${NOTION_DATABASE_ID}/query`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${NOTION_API_KEY}`,
+        'Notion-Version': '2022-06-28',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(body),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Notion API error: ${response.status}`);
+    }
+
+    const data = await response.json();
+
+    for (const page of data.results) {
+      const properties = page.properties;
+      
+      // 提取图片 URL (Cover 字段)
+      let imageUrl = '';
+      if (properties.Cover?.files?.[0]) {
+        const file = properties.Cover.files[0];
+        imageUrl = file.file?.url || file.external?.url || '';
+      }
+
+      // 提取标题
+      let title = '';
+      if (properties.Name?.title?.[0]) {
+        title = properties.Name.title[0].plain_text;
+      }
+
+      if (imageUrl) {
+        items.push({
+          id: page.id,
+          title,
+          image: imageUrl,
+        });
+      }
+    }
+
+    cursor = data.has_more ? data.next_cursor : undefined;
+  } while (cursor);
+
+  return items;
+}
 
 // ============================================================================
 // 配置

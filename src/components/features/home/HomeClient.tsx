@@ -37,7 +37,7 @@ const PHASES = {
 // ============================================================================
 
 function useWindowSize() {
-  const [windowWidth, setWindowWidth] = useState<number>(DEFAULTS.windowWidth);
+  const [windowWidth, setWindowWidth] = useState<number | null>(null);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -47,7 +47,7 @@ function useWindowSize() {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  return { windowWidth };
+  return { windowWidth: windowWidth ?? DEFAULTS.windowWidth, isReady: windowWidth !== null };
 }
 
 function useSortedItems(items: NotionItem[], categories: string[]) {
@@ -90,7 +90,7 @@ export default function HomeClient({
   const isJumpingRef = useRef(false);
 
   const sortedItems = useSortedItems(items, categories);
-  const { windowWidth } = useWindowSize();
+  const { windowWidth, isReady } = useWindowSize();
 
   // 预加载关键图片（渐进式策略）
   const criticalImageUrls = useMemo(() => {
@@ -136,7 +136,13 @@ export default function HomeClient({
     return 1;
   });
   // 使用较软的弹簧，让快速滚动时也有平滑过渡
-  const introScale = useSpring(introScaleRaw, { stiffness: 40, damping: 20 });
+  // 注意：restSpeed 和 restDelta 设置较大值，让初始状态快速稳定
+  const introScale = useSpring(introScaleRaw, { 
+    stiffness: 40, 
+    damping: 20,
+    restSpeed: 0.5,
+    restDelta: 0.01,
+  });
 
   // Outro 缩放：放大 → 停留
   const outroScaleRaw = useTransform(scrollYProgress, (p: number) => {
@@ -151,6 +157,9 @@ export default function HomeClient({
 
   // 水平位移
   const x = useTransform(scrollYProgress, (p): number => {
+    // 确保 maxScroll 已经计算好（containerWidth > 0）
+    // 初始加载时 scrollYProgress 可能有微小的非零值，强制返回 0
+    if (containerWidth === 0 || p < 0.001) return 0;
     if (p < PHASES.introEnd) return 0;
     if (p < PHASES.outroStart) {
       return ((p - PHASES.introEnd) / (PHASES.outroStart - PHASES.introEnd)) * maxScroll;
@@ -307,6 +316,10 @@ export default function HomeClient({
     <main
       ref={scrollContainerRef}
       className="h-[100dvh] w-full overflow-y-auto overflow-x-hidden bg-stone-100 dark:bg-neutral-700 no-scrollbar overscroll-none"
+      style={{
+        // 在窗口尺寸就绪前隐藏内容，避免跳动
+        visibility: isReady ? 'visible' : 'hidden',
+      }}
     >
       <Navigation
         activeSection={activeSection}

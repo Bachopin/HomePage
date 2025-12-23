@@ -180,7 +180,11 @@ export function getProxyImageUrl(
 }
 
 /**
- * 获取优化后的图片 URL（更新为使用代理）
+ * 获取优化后的图片 URL
+ * 
+ * 优先级：
+ * 1. 本地优化图片（构建时生成）
+ * 2. 实时代理（fallback）
  */
 export async function getOptimizedImageUrl(
   originalUrl: string,
@@ -199,16 +203,34 @@ export async function getOptimizedImageUrl(
     connectionType = 'unknown',
   } = options;
   
-  // 根据视口和设备选择尺寸
-  let targetWidth = selectImageSize(viewportWidth, devicePixelRatio);
+  // 优先尝试本地优化图片
+  await loadImageMapping();
+  const optimizedImage = findOptimizedImage(originalUrl);
   
-  // 转换为像素值
+  if (optimizedImage) {
+    // 根据视口和设备选择尺寸
+    const targetSize = selectImageSize(viewportWidth, devicePixelRatio);
+    const versions = optimizedImage.optimized[targetSize];
+    
+    if (versions) {
+      const selectedImage = selectImageFormat(versions, preferWebP);
+      if (selectedImage) {
+        return {
+          primary: selectedImage.path,
+          fallback: originalUrl,
+          shouldUpgrade: false, // 已经是优化版本，不需要升级
+        };
+      }
+    }
+  }
+  
+  // Fallback: 使用实时代理
+  const targetWidth = selectImageSize(viewportWidth, devicePixelRatio);
   const widthMap = {
     thumbnail: 200,
     medium: 800,
     large: 1200,
   };
-  
   const width = widthMap[targetWidth];
   
   // 根据网络条件调整质量
