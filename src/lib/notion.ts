@@ -22,7 +22,7 @@ export interface DatabaseIcon {
 export interface NotionItem {
   id: string;
   title: string;
-  year: string;
+  quotes: string;
   description?: string;
   type: 'intro' | 'project' | 'outro';
   image: string;
@@ -480,15 +480,15 @@ function mapPageToItem(page: any): NotionItem {
       title = '';
     }
 
-    // Extract year (Year property - can be text like "Trade | Research")
-    let year = '';
+    // Extract quotes (Quotes property - can be text like "Trade | Research")
+    let quotes = '';
     try {
-      year = props.Year?.rich_text?.[0]?.plain_text || 
-             props.Year?.title?.[0]?.plain_text || 
+      quotes = props.Quotes?.rich_text?.[0]?.plain_text || 
+             props.Quotes?.title?.[0]?.plain_text || 
              '';
     } catch (error) {
-      // Year is optional, so we don't fail validation
-      year = '';
+      // Quotes is optional, so we don't fail validation
+      quotes = '';
     }
 
     // Extract description (Summary property) - support multi-line text
@@ -611,7 +611,7 @@ function mapPageToItem(page: any): NotionItem {
     return {
       id: page.id,
       title: title || '', // Title is optional, use empty string if not provided
-      year,
+      quotes,
       description,
       type,
       image,
@@ -628,7 +628,7 @@ function mapPageToItem(page: any): NotionItem {
     return {
       id: page.id,
       title: '', // Use empty string instead of 'Untitled'
-      year: '',
+      quotes: '',
       description: '',
       type: 'project',
       image: '',

@@ -23,7 +23,16 @@ Fork 本项目后，按照以下步骤快速部署你的个人网站。
 3. 填写基本信息，获得 **Integration Token**
 
 #### 1.2 创建数据库
-创建一个 Notion 数据库，包含以下字段：
+
+**🚀 快速开始：使用模板**
+
+点击下方链接直接复制预配置的 Notion 数据库模板：
+
+**👉 [复制 Notion 数据库模板](https://mextrel.notion.site/notionhome?v=2d0a2cfb3e4980f6987f000c6c74f712&source=copy_link)**
+
+模板包含完整的字段配置和示例数据，复制后即可直接使用。
+
+**📋 数据库字段说明：**
 
 | 字段名 | 类型 | 必需 | 说明 |
 |--------|------|------|------|
@@ -32,7 +41,7 @@ Fork 本项目后，按照以下步骤快速部署你的个人网站。
 | Grid Size | Select | ✅ | 1x1 \| 1x2 \| 2x1 \| 2x2 |
 | Status | Select | ✅ | Live \| Draft |
 | Summary | Text | ❌ | 项目描述 |
-| Year | Text | ❌ | 年份或标签 |
+| Quotes | Text | ❌ | 引用或标签 |
 | Cover | Files | ❌ | 封面图片 |
 | Link | URL | ❌ | 项目链接 |
 | Category | Select | ❌ | 项目分类 |

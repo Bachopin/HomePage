@@ -8,7 +8,7 @@ import { ANIMATION } from '@/lib/config';
 interface Item {
   id: number;
   title: string;
-  year: string;
+  quotes: string;
   image: string;
   link: string;
 }
@@ -74,7 +74,7 @@ export default function InteractiveList({ items }: InteractiveListProps) {
             <div className="flex items-center justify-between py-3 border-b border-gray-200 dark:border-gray-900 transition-colors group-hover:border-gray-400 dark:group-hover:border-gray-700">
               <div className="flex items-center gap-6">
                 <span className="text-xs text-gray-500 dark:text-gray-500 font-mono w-12">
-                  {item.year}
+                  {item.quotes}
                 </span>
                 <h3 className="text-base font-normal text-gray-900 dark:text-gray-100 transition-colors group-hover:text-gray-600 dark:group-hover:text-gray-300">
                   {item.title}

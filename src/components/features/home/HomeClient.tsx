@@ -70,7 +70,7 @@ function useSortedItems(items: NotionItem[], categories: string[]) {
         const idxB = categoryIndexMap.get(b.category || '') ?? Infinity;
         if (idxA !== idxB) return idxA - idxB;
         if ((a.sort ?? Infinity) !== (b.sort ?? Infinity)) return (a.sort ?? Infinity) - (b.sort ?? Infinity);
-        return (parseInt(b.year || '0', 10) || 0) - (parseInt(a.year || '0', 10) || 0);
+        return (parseInt(b.quotes || '0', 10) || 0) - (parseInt(a.quotes || '0', 10) || 0);
       }
       return 0;
     });
@@ -365,7 +365,7 @@ export default function HomeClient({
                     key={item.id}
                     id={item.id}
                     title={item.title}
-                    year={item.year}
+                    quotes={item.quotes}
                     description={item.description}
                     image={item.image}
                     size={item.size}

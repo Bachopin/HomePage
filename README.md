@@ -28,8 +28,15 @@ npm run setup-check
 ```
 
 ### 3. 配置 Notion
+
+**🚀 快速开始：使用模板**
+
+👉 **[复制 Notion 数据库模板](https://mextrel.notion.site/notionhome?v=2d0a2cfb3e4980f6987f000c6c74f712&source=copy_link)**
+
+点击上方链接直接复制预配置的数据库模板，然后：
+
 1. 创建 [Notion 集成](https://www.notion.so/my-integrations)
-2. 创建数据库（参考下方结构）
+2. 在复制的数据库中邀请你的集成
 3. 复制 `.env.example` 为 `.env` 并填入配置
 
 ### 4. 个性化配置
@@ -186,7 +193,7 @@ NOTION_DATABASE_ID=your_database_id
 | 字段 | 类型 | 说明 |
 |------|------|------|
 | Name | Title | 项目标题（可选） |
-| Year | Rich Text | 年份/标签 |
+| Quotes | Rich Text | 引用/标签 |
 | Summary | Rich Text | 描述（支持多行） |
 | Cover | Files | 封面图片 |
 | Grid Size | Select | 卡片尺寸 (1x1/1x2/2x1/2x2) |

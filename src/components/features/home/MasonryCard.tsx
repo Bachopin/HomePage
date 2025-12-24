@@ -23,7 +23,7 @@ import { DEFAULTS } from '@/lib/config';
 interface MasonryCardProps {
   id: number | string;
   title: string;
-  year: string;
+  quotes: string;
   image: string;
   size: CardSize;
   link?: string;
@@ -97,7 +97,7 @@ function IntroOutroLinkIndicator({ visible }: IntroOutroLinkIndicatorProps) {
 
 interface IntroOutroCardProps {
   title: string;
-  year: string;
+  quotes: string;
   description?: string;
   link?: string;
   absolutePosition?: MasonryCardProps['absolutePosition'];
@@ -110,7 +110,7 @@ interface IntroOutroCardProps {
 
 function IntroOutroCard({
   title,
-  year,
+  quotes,
   description,
   link,
   absolutePosition,
@@ -166,9 +166,9 @@ function IntroOutroCard({
         <IntroOutroLinkIndicator visible={hasLink} />
         
         <div className="w-full h-full flex flex-col justify-center items-center p-8 text-white dark:text-black overflow-hidden" style={{ borderRadius: UI.cardBorderRadius }}>
-          {year && (
+          {quotes && (
             <span className="text-xs font-mono opacity-60 text-white/60 dark:text-black/60 mb-4">
-              {year}
+              {quotes}
             </span>
           )}
           {title && (
@@ -255,7 +255,7 @@ function ProjectCardSkeleton() {
       {/* 底部文字骨架 - 更小更简洁 */}
       <div className="absolute bottom-0 left-0 right-0 p-4">
         <div className="space-y-1">
-          {/* Year skeleton */}
+          {/* Quotes skeleton */}
           <div className="h-2 w-12 bg-neutral-300 dark:bg-neutral-700 rounded" />
           {/* Title skeleton */}
           <div className="h-3 w-24 bg-neutral-300 dark:bg-neutral-700 rounded" />
@@ -273,20 +273,20 @@ function ProjectCardSkeleton() {
 
 interface ProjectCardTextOverlayProps {
   title: string;
-  year: string;
+  quotes: string;
   description?: string;
   scrambleTrigger?: number;
 }
 
 function ProjectCardTextOverlay({
   title,
-  year,
+  quotes,
   description,
   scrambleTrigger,
 }: ProjectCardTextOverlayProps) {
   const [isHovered, setIsHovered] = useState(false);
   
-  if (!year && !title) return null;
+  if (!quotes && !title) return null;
 
   return (
     <div 
@@ -295,9 +295,9 @@ function ProjectCardTextOverlay({
       onMouseLeave={() => setIsHovered(false)}
     >
       <div className="text-white">
-        {year && (
+        {quotes && (
           <ScrambleText
-            text={year}
+            text={quotes}
             as="span"
             className="text-xs font-mono opacity-70 text-white/90 mb-1 block"
             triggerReplay={scrambleTrigger}
@@ -333,7 +333,7 @@ function ProjectCardTextOverlay({
 
 interface TextCardContentProps {
   title: string;
-  year: string;
+  quotes: string;
   description?: string;
   size: CardSize;
   scrambleTrigger?: number;
@@ -344,7 +344,7 @@ interface TextCardContentProps {
 
 function TextCardContent({
   title,
-  year,
+  quotes,
   description,
   size,
   scrambleTrigger,
@@ -356,7 +356,7 @@ function TextCardContent({
   
   const isLarge = size === '2x2' || size === '2x1';
   const isTall = size === '1x2' || size === '2x2';
-  const bgText = title || year || '';
+  const bgText = title || quotes || '';
 
   return (
     <div 
@@ -378,9 +378,9 @@ function TextCardContent({
 
       {/* 前景文字内容 */}
       <div className="text-center px-6 z-10 relative">
-        {year && (
+        {quotes && (
           <ScrambleText
-            text={year}
+            text={quotes}
             as="span"
             className={`font-mono text-neutral-500 dark:text-neutral-400 mb-3 block ${isLarge ? 'text-sm' : 'text-xs'}`}
             triggerReplay={scrambleTrigger}
@@ -418,7 +418,7 @@ function TextCardContent({
 
 export default function MasonryCard({
   title,
-  year,
+  quotes,
   image,
   size,
   link = '#',
@@ -496,8 +496,8 @@ export default function MasonryCard({
   const hasImage = currentImageUrl && currentImageUrl.trim() !== '';
   // 判断是否应该显示占位符（只在有图片但正在加载且未出错时才显示）
   const shouldShowPlaceholder = hasImage && isLoading && !hasError;
-  // 判断是否有内容（Name、Summary、Year 任意一个有文字）
-  const hasContent = (title && title.trim() !== '') || (description && description.trim() !== '') || (year && year.trim() !== '');
+  // 判断是否有内容（Name、Summary、Quotes 任意一个有文字）
+  const hasContent = (title && title.trim() !== '') || (description && description.trim() !== '') || (quotes && quotes.trim() !== '');
   // 判断是否应该显示为文字卡片（无图片 或 图片加载失败）
   const shouldShowAsTextCard = !hasImage || hasError;
 
@@ -510,7 +510,7 @@ export default function MasonryCard({
     return (
       <IntroOutroCard
         title={title}
-        year={year}
+        quotes={quotes}
         description={description}
         link={link}
         absolutePosition={absolutePosition}
@@ -601,7 +601,7 @@ export default function MasonryCard({
           {shouldShowAsTextCard && hasContent && (
             <TextCardContent
               title={title}
-              year={year}
+              quotes={quotes}
               description={description}
               size={size}
               scrambleTrigger={scrambleTrigger}
@@ -626,7 +626,7 @@ export default function MasonryCard({
           {hasImage && !isLoading && !hasError && (
             <ProjectCardTextOverlay
               title={title}
-              year={year}
+              quotes={quotes}
               description={description}
               scrambleTrigger={scrambleTrigger}
             />

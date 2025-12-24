@@ -84,6 +84,29 @@ NEXT_PUBLIC_IMAGE_STRATEGY=progressive
 NEXT_PUBLIC_SHOW_IMAGE_DEBUG=false
 ```
 
+## 📋 Notion 数据库配置
+
+### 快速开始：使用模板
+
+**👉 [复制 Notion 数据库模板](https://mextrel.notion.site/notionhome?v=2d0a2cfb3e4980f6987f000c6c74f712&source=copy_link)**
+
+点击上方链接直接复制预配置的数据库模板，包含完整字段配置和示例数据。
+
+### 手动配置步骤
+
+1. **创建 Notion 集成**
+   - 访问 [Notion Integrations](https://www.notion.so/my-integrations)
+   - 创建新集成，获取 API Key
+
+2. **设置数据库权限**
+   - 在数据库页面点击 "Share"
+   - 邀请你创建的集成
+   - 复制数据库 ID（URL 中的长字符串）
+
+3. **配置环境变量**
+   - 将 API Key 设置为 `NOTION_API_KEY`
+   - 将数据库 ID 设置为 `NOTION_DATABASE_ID`
+
 ## 📊 方案对比
 
 | 特性 | Vercel | Netlify | Railway | 自建服务器 |
