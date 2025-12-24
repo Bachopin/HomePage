@@ -135,13 +135,12 @@ export default function HomeClient({
     }
     return 1;
   });
-  // 使用较软的弹簧，让快速滚动时也有平滑过渡
-  // 注意：restSpeed 和 restDelta 设置较大值，让初始状态快速稳定
+  // 使用更稳定的弹簧配置，避免快速滚动时的异常跳跃
   const introScale = useSpring(introScaleRaw, { 
-    stiffness: 40, 
-    damping: 20,
-    restSpeed: 0.5,
-    restDelta: 0.01,
+    stiffness: 60, 
+    damping: 25,
+    restSpeed: 0.01,
+    restDelta: 0.001,
   });
 
   // Outro 缩放：放大 → 停留
@@ -153,7 +152,12 @@ export default function HomeClient({
     }
     return ANIMATION.imageScale;
   });
-  const outroScale = useSpring(outroScaleRaw, { stiffness: 40, damping: 20 });
+  const outroScale = useSpring(outroScaleRaw, { 
+    stiffness: 60, 
+    damping: 25,
+    restSpeed: 0.01,
+    restDelta: 0.001,
+  });
 
   // 水平位移
   const x = useTransform(scrollYProgress, (p): number => {
@@ -198,8 +202,13 @@ export default function HomeClient({
     // 停留区间：完全透明
     return 0;
   });
-  // 使用较软弹簧，让快速滚动时透明度变化也平滑
-  const contentOpacity = useSpring(contentOpacityRaw, { stiffness: 40, damping: 20 });
+  // 使用更稳定的弹簧，让快速滚动时透明度变化也平滑
+  const contentOpacity = useSpring(contentOpacityRaw, { 
+    stiffness: 60, 
+    damping: 25,
+    restSpeed: 0.01,
+    restDelta: 0.001,
+  });
 
   // =========================================================================
   // 无缝循环：停留 + 累积动量 + 瞬间跳转
