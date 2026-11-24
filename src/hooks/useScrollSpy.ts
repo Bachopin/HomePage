@@ -2,6 +2,7 @@ import type { RefObject } from 'react';
 import { useState, useCallback, useRef } from 'react';
 import type { MotionValue } from 'framer-motion';
 import { useMotionValueEvent } from 'framer-motion';
+import { SCROLL } from '@/lib/config';
 
 /**
  * Hook 输入参数
@@ -30,12 +31,6 @@ export interface UseScrollSpyResult {
   /** 滚动到指定分类的函数 */
   scrollToCategory: (category: string) => void;
 }
-
-// 滚动阶段边界（需要和 HomeClient 中的 PHASES 保持一致）
-const PHASES = {
-  introEnd: 0.12,      // 水平滚动开始
-  outroStart: 0.88,    // 水平滚动结束
-} as const;
 
 /**
  * 滚动监听 Hook
@@ -163,7 +158,7 @@ export function useScrollSpy({
       if (isNaN(ratio) || !isFinite(ratio)) return;
 
       // 对应的滚动进度：introEnd + ratio * (outroStart - introEnd)
-      const scrollProgress = PHASES.introEnd + ratio * (PHASES.outroStart - PHASES.introEnd);
+      const scrollProgress = SCROLL.introEnd + ratio * (SCROLL.outroStart - SCROLL.introEnd);
       const targetScrollY = scrollableHeight * scrollProgress;
 
       // 防御：目标位置无效

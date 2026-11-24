@@ -3,10 +3,11 @@
 import { motion } from 'framer-motion';
 import type { MotionValue } from 'framer-motion';
 import { useTransform } from 'framer-motion';
+import { SCROLL } from '@/lib/config';
 
 // ============================================================================
 // ScrollHint - 简洁的滚动提示组件（鼠标滚轮图标）
-// 只在 Intro 停留区间（scrollProgress < 0.06）显示
+// 只在 Intro 停留区间（scrollProgress < SCROLL.introPauseEnd）显示
 // ============================================================================
 
 export interface ScrollHintProps {
@@ -16,9 +17,6 @@ export interface ScrollHintProps {
   className?: string;
 }
 
-// Intro 停留区间结束点（与 HomeClient PHASES.introPauseEnd 保持一致）
-const INTRO_PAUSE_END = 0.06;
-
 export default function ScrollHint({ 
   scrollProgress,
   className = '',
@@ -26,7 +24,7 @@ export default function ScrollHint({
   // 只在停留区间显示，开始缩放时立即消失
   const opacity = useTransform(
     scrollProgress, 
-    [0, INTRO_PAUSE_END * 0.8, INTRO_PAUSE_END], 
+    [0, SCROLL.introPauseEnd * 0.8, SCROLL.introPauseEnd], 
     [1, 1, 0]
   );
 
