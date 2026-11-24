@@ -35,8 +35,12 @@ export interface UseImageCacheResult {
 const imageCache = new Map<string, ImageCacheEntry>();
 const MAX_CACHE_SIZE = 50; // 最大缓存数量
 const CACHE_EXPIRE_TIME = 30 * 60 * 1000; // 30分钟过期
+const CLEANUP_INTERVAL = 5 * 60 * 1000; // 5分钟
 
-// 清理过期缓存
+// 模块级单一定时器（避免每个卡片实例各自 setInterval）
+let cleanupTimer: ReturnType<typeof setInterval> | null = null;
+let cleanupSubscribers = 0;
+
 function cleanExpiredCache() {
   const now = Date.now();
   for (const [url, entry] of imageCache.entries()) {
@@ -46,16 +50,29 @@ function cleanExpiredCache() {
   }
 }
 
-// 限制缓存大小
 function limitCacheSize() {
   if (imageCache.size <= MAX_CACHE_SIZE) return;
   
-  // 按时间戳排序，删除最旧的条目
   const entries = Array.from(imageCache.entries())
     .sort(([, a], [, b]) => a.timestamp - b.timestamp);
   
   const toDelete = entries.slice(0, imageCache.size - MAX_CACHE_SIZE);
   toDelete.forEach(([url]) => imageCache.delete(url));
+}
+
+function subscribeCleanupTimer() {
+  cleanupSubscribers += 1;
+  if (!cleanupTimer) {
+    cleanupTimer = setInterval(cleanExpiredCache, CLEANUP_INTERVAL);
+  }
+}
+
+function unsubscribeCleanupTimer() {
+  cleanupSubscribers = Math.max(0, cleanupSubscribers - 1);
+  if (cleanupSubscribers === 0 && cleanupTimer) {
+    clearInterval(cleanupTimer);
+    cleanupTimer = null;
+  }
 }
 
 // ============================================================================
@@ -66,11 +83,9 @@ export function useImageCache(imageUrl: string): UseImageCacheResult {
   const [isLoaded, setIsLoaded] = useState(false);
   const [hasError, setHasError] = useState(false);
 
-  // 预加载图片函数
   const preloadImage = useCallback(async (url: string): Promise<void> => {
     if (!url || url.trim() === '') return;
 
-    // 检查缓存
     const cached = imageCache.get(url);
     if (cached) {
       if (cached.loaded) return Promise.resolve();
@@ -109,12 +124,10 @@ export function useImageCache(imageUrl: string): UseImageCacheResult {
     });
   }, []);
 
-  // 清理缓存函数
   const clearCache = useCallback(() => {
     imageCache.clear();
   }, []);
 
-  // 监听图片 URL 变化
   useEffect(() => {
     if (!imageUrl || imageUrl.trim() === '') {
       setIsLoaded(true);
@@ -122,7 +135,6 @@ export function useImageCache(imageUrl: string): UseImageCacheResult {
       return;
     }
 
-    // 检查缓存
     const cached = imageCache.get(imageUrl);
     if (cached) {
       setIsLoaded(cached.loaded);
@@ -130,7 +142,6 @@ export function useImageCache(imageUrl: string): UseImageCacheResult {
       return;
     }
 
-    // 开始加载
     setIsLoaded(false);
     setHasError(false);
 
@@ -145,10 +156,9 @@ export function useImageCache(imageUrl: string): UseImageCacheResult {
       });
   }, [imageUrl, preloadImage]);
 
-  // 定期清理过期缓存
   useEffect(() => {
-    const interval = setInterval(cleanExpiredCache, 5 * 60 * 1000); // 每5分钟清理一次
-    return () => clearInterval(interval);
+    subscribeCleanupTimer();
+    return () => unsubscribeCleanupTimer();
   }, []);
 
   return {

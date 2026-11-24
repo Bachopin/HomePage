@@ -1,184 +1,124 @@
-# 🏗️ 项目架构指南
+# 项目架构指南
 
-本文档定义了项目的架构规范，所有开发都应遵循这些原则。
+开发应遵循以下约定，避免与实现漂移。
 
-## 📁 目录结构
+## 目录结构
 
 ```
 src/
-├── app/                    # Next.js App Router 页面
-│   └── api/                # Route Handlers（如 image-proxy）
+├── app/                         # App Router 页面与 Route Handlers
+│   └── api/image-proxy/         # 图片代理（Node runtime + Sharp）
 ├── components/
-│   ├── ui/                 # 通用基础组件（可复用）
-│   ├── layout/             # 全局布局组件
-│   └── features/           # 业务功能组件（按功能分组）
-│       └── home/           # 首页相关组件
-├── hooks/                  # 自定义 React Hooks
-└── lib/                    # 工具库、服务、配置
+│   ├── ui/                      # 无业务逻辑的通用 UI
+│   ├── layout/                  # 全局布局（Navigation）
+│   └── features/home/           # 首页业务（HomeClient / MasonryCard）
+├── hooks/                       # 布局、视差、滚动、图片
+└── lib/                         # config / notion / transformers / image*
 ```
 
-## 🎯 核心原则
+不再使用 `pages/` 路由；API 全部在 App Router。
 
-### 1. 单一事实来源 (Single Source of Truth)
+## 核心原则
 
-所有配置集中在 `src/lib/config.ts`：
-- 布局参数、动画配置、UI 常量
-- **禁止在组件中硬编码魔术数字**
+### 1. 单一事实来源（SSOT）
 
-```typescript
-// ✅ 正确
-import { ANIMATION, UI } from '@/lib/config';
-const scale = ANIMATION.cardHoverScale;
-
-// ❌ 错误
-const scale = 1.02; // 魔术数字
-```
-
-### 2. 组件分层
-
-| 层级 | 目录 | 职责 | 示例 |
-|------|------|------|------|
-| UI 层 | `components/ui/` | 通用、无业务逻辑、可复用 | `ScrambleText`, `ScrollHint`, `ScrollingText` |
-| 布局层 | `components/layout/` | 全局布局结构 | `Navigation` |
-| 功能层 | `components/features/` | 业务逻辑、特定功能 | `HomeClient`, `MasonryCard` |
-
-### 3. 桶文件导出 (Barrel Export)
-
-每个目录必须有 `index.ts` 导出所有公开模块：
-
-```typescript
-// components/ui/index.ts
-export { default as ScrambleText } from './ScrambleText';
-export { default as DarkModeToggle } from './DarkModeToggle';
-```
-
-导入时使用桶文件：
-
-```typescript
-// ✅ 正确
-import { ScrambleText, DarkModeToggle } from '@/components/ui';
-
-// ❌ 错误
-import ScrambleText from '@/components/ui/ScrambleText';
-```
-
-### 4. Hook 设计原则
-
-- 每个 Hook 单独一个文件
-- 导出类型定义
-- 在 `hooks/index.ts` 中统一导出
-
-```typescript
-// hooks/index.ts
-export { useMyHook } from './useMyHook';
-export type { UseMyHookProps, UseMyHookResult } from './useMyHook';
-```
-
-### 5. 新增组件检查清单
-
-添加新组件时：
-
-- [ ] 确定组件层级（ui / layout / features）
-- [ ] 创建组件文件
-- [ ] 在对应 `index.ts` 中添加导出
-- [ ] 如有配置常量，添加到 `lib/config.ts`
-- [ ] 如有类型定义，确保导出
-
-## 📦 现有模块说明
-
-### UI 组件 (`components/ui/`)
-
-| 组件 | 用途 |
-|------|------|
-| `ScrambleText` | 文字乱码解码动画效果 |
-| `CrosshairToggle` | 十字准星暗色模式切换 |
-| `DisableContextMenu` | 禁用右键菜单 |
-| `ErrorBoundary` | 错误边界 |
-| `ScrollHint` | 滚动提示组件（鼠标滚轮图标） |
-| `ScrollingText` | 背景滚动大字效果 |
-
-### Hooks (`hooks/`)
-
-| Hook | 用途 |
-|------|------|
-| `useMasonryLayout` | 瀑布流布局计算 |
-| `useParallax` | 视差效果物理引擎 |
-| `useScrollSpy` | 滚动监听与导航 |
-| `useProgressiveImage` | 渐进式图片加载 |
-| `useImageCache` | 图片缓存管理 |
-
-### 工具库 (`lib/`)
-
-| 文件 | 用途 |
-|------|------|
-| `config.ts` | 全局配置中心（布局、动画、滚动阶段、UI、SEO） |
-| `notion.ts` | Notion API 服务（请求级 cache，一次取出 items/title/icon/categoryOrder） |
-| `imageService.ts` | 图片优化服务 |
-| `imageConfig.ts` | 图片配置 |
-| `transformers.ts` | 数据转换器 |
-
-### 配置常量 (`lib/config.ts`)
+布局、动画、滚动阶段、UI 常量、SEO 均在 `src/lib/config.ts`：
 
 | 常量 | 用途 |
 |------|------|
 | `BREAKPOINTS` | 响应式断点 |
-| `LAYOUT_DESKTOP/MOBILE` | 布局配置 |
-| `CARD_SIZES` | 卡片尺寸定义 |
-| `ANIMATION` | 动画参数（缩放、时长、弹簧） |
-| `SCROLL` | 滚动阶段与循环参数（与 HomeClient 一致） |
-| `UI` | UI 常量（圆角、图标尺寸） |
-| `DEFAULTS` | 默认值 |
-| `METADATA` | SEO 元数据 |
+| `LAYOUT_DESKTOP` / `LAYOUT_MOBILE` | 网格列宽与间距 |
+| `CARD_SIZES` | 1x1 / 1x2 / 2x1 / 2x2 |
+| `ANIMATION` | 视差、悬停、Intro/Outro 弹簧 |
+| `SCROLL` | 滚动阶段与循环阈值（HomeClient / useScrollSpy / ScrollHint 共用） |
+| `UI` | 圆角、图标尺寸 |
+| `METADATA` | SEO / Open Graph |
 
-## ✏️ 命名规范
+禁止在组件内硬编码与上述重复的魔术数字。
+
+### 2. 组件分层
+
+| 层级 | 目录 | 职责 |
+|------|------|------|
+| UI | `components/ui/` | 可复用、无业务逻辑 |
+| 布局 | `components/layout/` | 导航等全局壳 |
+| 功能 | `components/features/*` | 页面业务 |
+
+使用目录 `index.ts` 桶导出。
+
+### 3. Notion 数据流
+
+```
+getDatabaseItems()  ← React cache()，同请求去重
+        │
+        ├─ database retrieve → title / icon / categoryOrder
+        └─ database query（分页）→ Live items
+                │
+        transformers.processHomePageItems
+                │
+        page.tsx → HomeClient → MasonryCard
+```
+
+- `layout.tsx` / `generateMetadata` / `page.tsx` 共用同一次拉取。
+- `getCategoryOrder()` 仅为兼容封装，内部读 cache 结果，不再额外请求。
+- Debug 字段异步写入，不阻塞页面返回。
+- Query 使用分页，避免超过 100 条时静默截断。
+
+### 4. 滚动与布局职责
+
+| 模块 | 职责 |
+|------|------|
+| `HomeClient` | 阶段动画、循环跳转、编排卡片 |
+| `MasonryCard` | Intro/Outro / Project 渲染 |
+| `useMasonryLayout` | GridOccupancyManager 填坑 |
+| `useParallax` | 视差几何 |
+| `useScrollSpy` | 分类高亮与跳转（读 `SCROLL`） |
+| `ScrollHint` | Intro 停留提示（读 `SCROLL.introPauseEnd`） |
+
+## UI / Hooks 清单
+
+### UI
+
+| 组件 | 用途 |
+|------|------|
+| `CrosshairToggle` | 十字准星暗色切换 |
+| `DisableContextMenu` | 禁右键 |
+| `ErrorBoundary` | 错误边界 |
+| `ScrambleText` | 乱码解码字效 |
+| `ScrollHint` | 滚轮提示 |
+| `ScrollingText` | 背景滚动大字 |
+
+### Hooks
+
+| Hook | 用途 |
+|------|------|
+| `useMasonryLayout` | 瀑布流布局 |
+| `useParallax` | 视差 |
+| `useScrollSpy` | 滚动导航 |
+| `useProgressiveImage` | 渐进图 |
+| `useImageCache` | 全局图片缓存（模块级清理定时器） |
+
+## 动态 Favicon
+
+运行时方案（无构建脚本）：
+
+```
+Notion Database Icon → layout.tsx → /api/image-proxy?url=...&w=&h=
+无图标时回退 /favicon.ico
+```
+
+支持 emoji（Twemoji CDN）、external、file、custom_emoji。
+
+## 命名规范
 
 | 类型 | 规范 | 示例 |
 |------|------|------|
-| 组件 | PascalCase | `ScrambleText.tsx` |
-| Hook | camelCase，以 `use` 开头 | `useParallax.ts` |
-| 工具函数 | camelCase | `getLayoutConfig` |
-| 常量 | UPPER_SNAKE_CASE | `ANIMATION`, `BREAKPOINTS` |
-| 类型 | PascalCase | `CardSize`, `LayoutConfig` |
+| 组件 | PascalCase | `MasonryCard.tsx` |
+| Hook | `use` + camelCase | `useParallax.ts` |
+| 常量 | UPPER_SNAKE_CASE | `SCROLL` |
+| 类型 | PascalCase | `NotionItem` |
 
-## 🔗 相关文档
+## 相关文档
 
-- [部署指南](./DEPLOYMENT_GUIDE.md)
+- [部署指南](../DEPLOYMENT_GUIDE.md)
 - [图片优化](./IMAGE_OPTIMIZATION.md)
-
-## 🎨 动态 Favicon 系统
-
-### 架构设计
-
-动态 favicon 系统基于 Notion 数据库图标自动生成多尺寸 favicon 文件：
-
-```
-Notion Database Icon → FaviconGenerator → Multi-size Files
-     ↓                       ↓                    ↓
-  emoji/file/external    Sharp Processing    16x16, 32x32, 192x192, 512x512
-```
-
-### 核心组件
-
-| 组件 | 职责 |
-|------|------|
-| `FaviconGenerator` | 核心生成逻辑，处理不同图标类型 |
-| `generate-favicon.js` | 构建脚本，集成到构建流程 |
-| `DatabaseIcon` 接口 | 类型定义，支持 emoji/external/file |
-
-### 支持的图标类型
-
-1. **Emoji**: 转换为 SVG 再生成 PNG
-2. **External URL**: 下载并处理外部图片
-3. **File Upload**: 处理 Notion 上传的文件
-
-### 错误处理策略
-
-- **多层回退**: Notion图标 → 默认图标 → 最简图标
-- **重试机制**: 网络请求失败时自动重试
-- **构建保护**: 确保构建过程不会因图标问题失败
-
-### 性能优化
-
-- **零额外API调用**: 复用现有 Notion 数据库查询
-- **文件大小控制**: 总计 < 50KB
-- **智能缓存**: 24小时内跳过重复生成

@@ -24,6 +24,16 @@ const TRANSPARENT_PIXEL = Buffer.from(
   'base64'
 );
 
+/** Stable key for Notion signed URLs (query params rotate; path usually stays). */
+function imageUrlKey(url: string): string {
+  try {
+    const parsed = new URL(url);
+    return `${parsed.origin}${parsed.pathname}`;
+  } catch {
+    return url.split('?')[0] ?? url;
+  }
+}
+
 async function getRefreshedImageUrl(originalUrl: string): Promise<string> {
   const cached = urlCache.get(originalUrl);
   if (cached && Date.now() - cached.timestamp < URL_CACHE_TTL) {
@@ -32,7 +42,10 @@ async function getRefreshedImageUrl(originalUrl: string): Promise<string> {
 
   try {
     const { items } = await getDatabaseItems();
-    const item = items.find(entry => entry.image === originalUrl);
+    const originalKey = imageUrlKey(originalUrl);
+    const item = items.find(
+      entry => entry.image && imageUrlKey(entry.image) === originalKey
+    );
 
     if (item?.image) {
       urlCache.set(originalUrl, {

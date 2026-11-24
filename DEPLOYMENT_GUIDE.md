@@ -113,34 +113,13 @@ export const METADATA: MetadataConfig = {
 - 格式：PNG 或 JPG
 - 大小：< 1MB
 
-#### 4.2 Favicon（自动生成）
-系统会自动从 Notion 数据库图标生成 favicon：
+#### 4.2 Favicon（运行时动态）
 
-**支持的图标类型：**
-- **Emoji**: 数据库图标设置为 emoji 时自动转换为 favicon
-- **外部图片**: 支持任何可访问的图片 URL
-- **上传文件**: 支持 Notion 中上传的图片文件
+`layout.tsx` 读取 Notion 数据库图标，经 `/api/image-proxy` 输出多尺寸 link：
 
-**生成的文件：**
-- `favicon.ico` (32x32)
-- `favicon-16x16.png`
-- `favicon-32x32.png` 
-- `apple-touch-icon.png` (192x192)
-- `android-chrome-512x512.png` (512x512)
-
-**手动生成：**
-```bash
-# 强制重新生成 favicon
-npm run generate-favicon:force
-
-# 查看详细日志
-npm run generate-favicon:force -- --verbose
-```
-
-**注意事项：**
-- 如果数据库没有设置图标，会生成默认的 "M" 字母图标
-- 构建时自动执行，无需手动操作
-- 总文件大小控制在 50KB 以内
+- 支持 emoji（Twemoji）、external URL、file / custom_emoji
+- **无图标时**回退到 `/favicon.ico`（不会再拼出错误的 `favicon.ico&w=...`）
+- 无需 `generate-favicon` 构建脚本；PWA manifest 见 `public/site.webmanifest`
 
 ### 5. Vercel 部署
 
@@ -225,17 +204,24 @@ export const LAYOUT_DESKTOP: LayoutConfig = {
 2. 修改 `src/lib/transformers.ts` 中的类型处理逻辑
 3. 在 `src/components/features/home/MasonryCard.tsx` 中添加渲染逻辑
 
-### 修改动画效果
-编辑 `src/lib/config.ts` 中的 `ANIMATION` 配置：
+### 修改动画 / 滚动阶段
+编辑 `src/lib/config.ts` 中的 `ANIMATION` 与 `SCROLL`（SSOT，勿在组件内再抄一份）：
 
 ```typescript
 export const ANIMATION = {
-  cardHoverScale: 1.02,     // 卡片悬停缩放
-  hoverDuration: 0.3,       // 悬停动画时长
-  springConfig: {           // 弹簧动画配置
-    stiffness: 300,
-    damping: 30,
-  },
+  cardHoverScale: 1.02,
+  hoverDuration: 0.2,
+  scrollScaleSpring: { stiffness: 60, damping: 25 },
+  scrollPositionSpring: { stiffness: 800, damping: 50 },
+};
+
+export const SCROLL = {
+  introPauseEnd: 0.06,
+  introEnd: 0.12,
+  outroStart: 0.88,
+  outroPauseStart: 0.94,
+  loopPauseMs: 1000,
+  loopMomentumThreshold: 600,
 };
 ```
 

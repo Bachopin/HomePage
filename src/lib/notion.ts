@@ -23,6 +23,71 @@ function getNotionHeaders(apiKey: string): HeadersInit {
   };
 }
 
+type NotionQueryBody = {
+  filter?: Record<string, unknown>;
+  sorts?: Array<Record<string, unknown>>;
+};
+
+/**
+ * Query all database pages with Notion pagination (100/page).
+ */
+async function queryAllDatabasePages(
+  databaseId: string,
+  headers: HeadersInit,
+  body: NotionQueryBody
+): Promise<{ ok: true; results: any[] } | { ok: false; status: number; errorData?: any }> {
+  const results: any[] = [];
+  let startCursor: string | undefined;
+
+  do {
+    const response = await fetch(`${NOTION_API_BASE}/databases/${databaseId}/query`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        ...body,
+        ...(startCursor ? { start_cursor: startCursor } : {}),
+      }),
+    });
+
+    if (!response.ok) {
+      let errorData: any;
+      try {
+        errorData = JSON.parse(await response.text());
+      } catch {
+        errorData = undefined;
+      }
+      return { ok: false, status: response.status, errorData };
+    }
+
+    const data = await response.json();
+    if (Array.isArray(data.results)) {
+      results.push(...data.results);
+    }
+    startCursor = data.has_more ? data.next_cursor : undefined;
+  } while (startCursor);
+
+  return { ok: true, results };
+}
+
+function scheduleDebugFieldUpdates(
+  mappedItems: Array<{ item: NotionItem; pageId: string }>
+): void {
+  const updatePromises = mappedItems.map(({ item, pageId }) => {
+    if (!item.isValid && item.validationError) {
+      return updateNotionDebugField(pageId, item.validationError);
+    }
+    return updateNotionDebugField(pageId, null);
+  });
+
+  // Fire-and-forget: do not block ISR / page render on Notion write quota
+  void Promise.allSettled(updatePromises).then((results) => {
+    const failures = results.filter(result => result.status === 'rejected');
+    if (failures.length > 0) {
+      console.warn(`Failed to update Debug field for ${failures.length} page(s).`);
+    }
+  });
+}
+
 export interface DatabaseIcon {
   // 统一为图片 URL，复用现有图片处理逻辑
   url: string;
@@ -214,31 +279,29 @@ async function fetchDatabaseItems(): Promise<DatabaseWithItems> {
     const apiKey = process.env.NOTION_API_KEY!;
     const databaseId = process.env.NOTION_DATABASE_ID!;
     const headers = getNotionHeaders(apiKey);
-    
-    // 1. Get database info (for title/icon/categories) and items in parallel
-    const [databaseResponse, itemsResponse] = await Promise.all([
+
+    const liveQueryBody: NotionQueryBody = {
+      filter: {
+        property: 'Status',
+        select: {
+          equals: 'Live',
+        },
+      },
+      sorts: [
+        {
+          timestamp: 'created_time',
+          direction: 'ascending',
+        },
+      ],
+    };
+
+    // Metadata + paginated items in parallel
+    const [databaseResponse, itemsResult] = await Promise.all([
       fetch(`${NOTION_API_BASE}/databases/${databaseId}`, {
         method: 'GET',
         headers,
       }),
-      fetch(`${NOTION_API_BASE}/databases/${databaseId}/query`, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({
-          filter: {
-            property: 'Status',
-            select: {
-              equals: 'Live',
-            },
-          },
-          sorts: [
-            {
-              timestamp: 'created_time',
-              direction: 'ascending',
-            },
-          ],
-        }),
-      })
+      queryAllDatabasePages(databaseId, headers, liveQueryBody),
     ]);
 
     // Extract title, icon, and category order from database metadata
@@ -249,7 +312,6 @@ async function fetchDatabaseItems(): Promise<DatabaseWithItems> {
       try {
         const database = await databaseResponse.json();
         
-        // Extract title
         if (database.title && Array.isArray(database.title) && database.title.length > 0) {
           const extractedTitle = database.title.map((t: any) => t.plain_text).join('');
           if (extractedTitle.trim()) {
@@ -257,128 +319,60 @@ async function fetchDatabaseItems(): Promise<DatabaseWithItems> {
           }
         }
         
-        // Extract icon
         if (database.icon) {
           icon = parseDatabaseIcon(database.icon);
         }
 
-        // Extract category order from the same metadata response (avoids a second DB fetch)
         categoryOrder = extractCategoryOrder(database.properties);
       } catch {
         console.warn('Failed to extract database metadata, using defaults');
       }
     }
 
-    // Handle items response
-    if (!itemsResponse.ok) {
-      if (itemsResponse.status === 429) {
+    let pageResults: any[] = [];
+
+    if (!itemsResult.ok) {
+      if (itemsResult.status === 429) {
         console.warn('Notion API rate limit exceeded (429). Returning empty array.');
         return { title, items: [], icon, categoryOrder };
       }
 
-      let errorData: any;
-      try {
-        const errorText = await itemsResponse.text();
-        errorData = JSON.parse(errorText);
-      } catch (parseError) {
-        console.error('Error parsing Notion API error response:', parseError);
-        return { title, items: [], icon, categoryOrder };
-      }
-      
-      // If Status filter fails, try without filter
-      if (errorData.code === 'validation_error' && errorData.message?.includes('Status')) {
+      const errorData = itemsResult.errorData;
+      if (errorData?.code === 'validation_error' && errorData.message?.includes('Status')) {
         console.warn('Status filter failed, trying without filter:', errorData.message);
-        try {
-          const fallbackResponse = await fetch(`${NOTION_API_BASE}/databases/${databaseId}/query`, {
-            method: 'POST',
-            headers,
-            body: JSON.stringify({
-              sorts: [
-                {
-                  timestamp: 'created_time',
-                  direction: 'ascending',
-                },
-              ],
-            }),
-          });
-          
-          if (!fallbackResponse.ok) {
-            if (fallbackResponse.status === 429) {
-              console.warn('Notion API rate limit exceeded (429) in fallback.');
-              return { title, items: [], icon, categoryOrder };
-            }
-            console.error(`Notion API error in fallback: ${fallbackResponse.status} ${fallbackResponse.statusText}`);
+        const fallback = await queryAllDatabasePages(databaseId, headers, {
+          sorts: [
+            {
+              timestamp: 'created_time',
+              direction: 'ascending',
+            },
+          ],
+        });
+
+        if (!fallback.ok) {
+          if (fallback.status === 429) {
+            console.warn('Notion API rate limit exceeded (429) in fallback.');
             return { title, items: [], icon, categoryOrder };
           }
-          
-          const fallbackData = await fallbackResponse.json();
-          const mappedItems = fallbackData.results.map((page: any) => ({
-            item: mapPageToItem(page),
-            pageId: page.id,
-          }));
-
-          // Update Debug fields
-          const updatePromises = mappedItems.map(({ item, pageId }: { item: NotionItem; pageId: string }) => {
-            if (!item.isValid && item.validationError) {
-              return updateNotionDebugField(pageId, item.validationError);
-            } else {
-              return updateNotionDebugField(pageId, null);
-            }
-          });
-
-          await Promise.allSettled(updatePromises).then((results) => {
-            const failures = results.filter(result => result.status === 'rejected');
-            if (failures.length > 0) {
-              console.warn(`Failed to update Debug field for ${failures.length} page(s) in fallback.`);
-            }
-          });
-
-          return { 
-            title, 
-            items: mappedItems.map(({ item }: { item: NotionItem; pageId: string }) => item),
-            icon,
-            categoryOrder,
-          };
-        } catch (fallbackError: any) {
-          console.error('Network error in fallback fetch:', fallbackError?.message || fallbackError);
+          console.error(`Notion API error in fallback: ${fallback.status}`);
           return { title, items: [], icon, categoryOrder };
         }
+
+        pageResults = fallback.results;
+      } else {
+        console.error(`Notion API error: ${itemsResult.status}`, errorData);
+        return { title, items: [], icon, categoryOrder };
       }
-      
-      console.error(`Notion API error: ${itemsResponse.status} ${itemsResponse.statusText}`, errorData);
-      return { title, items: [], icon, categoryOrder };
+    } else {
+      pageResults = itemsResult.results;
     }
 
-    // Parse successful items response
-    let data: any;
-    try {
-      data = await itemsResponse.json();
-    } catch (parseError) {
-      console.error('Error parsing Notion API response:', parseError);
-      return { title, items: [], icon, categoryOrder };
-    }
-
-    // Process items
-    const mappedItems = data.results.map((page: any) => ({
+    const mappedItems = pageResults.map((page: any) => ({
       item: mapPageToItem(page),
       pageId: page.id,
     }));
 
-    // Update Debug fields
-    const updatePromises = mappedItems.map(({ item, pageId }: { item: NotionItem; pageId: string }) => {
-      if (!item.isValid && item.validationError) {
-        return updateNotionDebugField(pageId, item.validationError);
-      } else {
-        return updateNotionDebugField(pageId, null);
-      }
-    });
-
-    await Promise.allSettled(updatePromises).then((results) => {
-      const failures = results.filter(result => result.status === 'rejected');
-      if (failures.length > 0) {
-        console.warn(`Failed to update Debug field for ${failures.length} page(s).`);
-      }
-    });
+    scheduleDebugFieldUpdates(mappedItems);
 
     return { 
       title, 

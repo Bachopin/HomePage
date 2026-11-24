@@ -70,7 +70,6 @@ export default function HomeClient({
   items,
   categories = [...DEFAULTS.categories],
 }: HomeClientProps) {
-  const contentRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLElement>(null);
   const isJumpingRef = useRef(false);
 
@@ -298,7 +297,6 @@ export default function HomeClient({
             }}
           >
             <div
-              ref={contentRef}
               className="relative h-full"
               style={{
                 width: `${containerWidth}px`,
