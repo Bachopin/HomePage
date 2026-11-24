@@ -7,14 +7,14 @@
 ```
 src/
 ├── app/                    # Next.js App Router 页面
+│   └── api/                # Route Handlers（如 image-proxy）
 ├── components/
 │   ├── ui/                 # 通用基础组件（可复用）
 │   ├── layout/             # 全局布局组件
 │   └── features/           # 业务功能组件（按功能分组）
 │       └── home/           # 首页相关组件
 ├── hooks/                  # 自定义 React Hooks
-├── lib/                    # 工具库、服务、配置
-└── pages/api/              # API 路由
+└── lib/                    # 工具库、服务、配置
 ```
 
 ## 🎯 核心原则
@@ -92,13 +92,10 @@ export type { UseMyHookProps, UseMyHookResult } from './useMyHook';
 |------|------|
 | `ScrambleText` | 文字乱码解码动画效果 |
 | `CrosshairToggle` | 十字准星暗色模式切换 |
-| `DarkModeToggle` | 暗色模式开关 |
 | `DisableContextMenu` | 禁用右键菜单 |
 | `ErrorBoundary` | 错误边界 |
-| `InteractiveList` | 交互列表（悬停显示图片） |
 | `ScrollHint` | 滚动提示组件（鼠标滚轮图标） |
 | `ScrollingText` | 背景滚动大字效果 |
-| `TypedText` | 打字机效果 |
 
 ### Hooks (`hooks/`)
 
@@ -109,19 +106,16 @@ export type { UseMyHookProps, UseMyHookResult } from './useMyHook';
 | `useScrollSpy` | 滚动监听与导航 |
 | `useProgressiveImage` | 渐进式图片加载 |
 | `useImageCache` | 图片缓存管理 |
-| `useMouse` | 鼠标位置追踪 |
-| `useInfiniteScroll` | 无限循环滚动 |
 
 ### 工具库 (`lib/`)
 
 | 文件 | 用途 |
 |------|------|
-| `config.ts` | 全局配置中心（布局、动画、UI、SEO） |
-| `notion.ts` | Notion API 服务 |
+| `config.ts` | 全局配置中心（布局、动画、滚动阶段、UI、SEO） |
+| `notion.ts` | Notion API 服务（请求级 cache，一次取出 items/title/icon/categoryOrder） |
 | `imageService.ts` | 图片优化服务 |
 | `imageConfig.ts` | 图片配置 |
 | `transformers.ts` | 数据转换器 |
-| `faviconGenerator.ts` | 动态 favicon 生成器 |
 
 ### 配置常量 (`lib/config.ts`)
 
@@ -131,7 +125,7 @@ export type { UseMyHookProps, UseMyHookResult } from './useMyHook';
 | `LAYOUT_DESKTOP/MOBILE` | 布局配置 |
 | `CARD_SIZES` | 卡片尺寸定义 |
 | `ANIMATION` | 动画参数（缩放、时长、弹簧） |
-| `SCROLL` | 滚动配置 |
+| `SCROLL` | 滚动阶段与循环参数（与 HomeClient 一致） |
 | `UI` | UI 常量（圆角、图标尺寸） |
 | `DEFAULTS` | 默认值 |
 | `METADATA` | SEO 元数据 |

@@ -55,35 +55,18 @@ interface MasonryCardProps {
 
 interface LinkIndicatorProps {
   visible: boolean;
+  /** Intro/Outro cards invert colors in dark mode */
+  invertOnDark?: boolean;
 }
 
-function LinkIndicator({ visible }: LinkIndicatorProps) {
+function LinkIndicator({ visible, invertOnDark = false }: LinkIndicatorProps) {
   if (!visible) return null;
   
   return (
     <div className="absolute top-4 right-4 z-30 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-      <div className="bg-black/40 backdrop-blur-sm rounded-full p-2">
+      <div className={`backdrop-blur-sm rounded-full p-2 ${invertOnDark ? 'bg-black/40 dark:bg-white/40' : 'bg-black/40'}`}>
         <ArrowUpRight 
-          className="text-white/90" 
-          style={{ width: UI.iconSize, height: UI.iconSize }} 
-        />
-      </div>
-    </div>
-  );
-}
-
-interface IntroOutroLinkIndicatorProps {
-  visible: boolean;
-}
-
-function IntroOutroLinkIndicator({ visible }: IntroOutroLinkIndicatorProps) {
-  if (!visible) return null;
-  
-  return (
-    <div className="absolute top-4 right-4 z-30 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-      <div className="bg-black/40 dark:bg-white/40 backdrop-blur-sm rounded-full p-2">
-        <ArrowUpRight 
-          className="text-white dark:text-black" 
+          className={invertOnDark ? 'text-white dark:text-black' : 'text-white/90'}
           style={{ width: UI.iconSize, height: UI.iconSize }} 
         />
       </div>
@@ -163,7 +146,7 @@ function IntroOutroCard({
       )}
       
       <CardWrapper {...wrapperProps} className="block w-full h-full">
-        <IntroOutroLinkIndicator visible={hasLink} />
+        <LinkIndicator visible={hasLink} invertOnDark />
         
         <div className="w-full h-full flex flex-col justify-center items-center p-8 text-white dark:text-black overflow-hidden" style={{ borderRadius: UI.cardBorderRadius }}>
           {quotes && (

@@ -6,7 +6,7 @@ import { Navigation } from '@/components/layout';
 import { MasonryCard } from '@/components/features/home';
 import type { NotionItem } from '@/lib/notion';
 import { useMasonryLayout, useScrollSpy, useProgressiveImagePreloader } from '@/hooks';
-import { ANIMATION, DEFAULTS } from '@/lib/config';
+import { ANIMATION, DEFAULTS, SCROLL } from '@/lib/config';
 
 // ============================================================================
 // Types
@@ -16,21 +16,6 @@ interface HomeClientProps {
   items: NotionItem[];
   categories?: string[];
 }
-
-// ============================================================================
-// Constants
-// ============================================================================
-
-const PHASES = {
-  // 停留区间：0 - 0.06 时 Intro 保持最大（约3秒停留）
-  introPauseEnd: 0.06,
-  // 缩放区间：0.06 - 0.12 时 Intro 从大变小
-  introEnd: 0.12,
-  // 水平滚动：0.12 - 0.88
-  outroStart: 0.88,
-  // 停留区间：0.94 - 1.0 时 Outro 保持最大（约3秒停留）
-  outroPauseStart: 0.94,
-} as const;
 
 // ============================================================================
 // Custom Hooks
@@ -128,94 +113,68 @@ export default function HomeClient({
   
   // Intro 缩放：停留 → 缩小
   const introScaleRaw = useTransform(scrollYProgress, (p: number) => {
-    if (p < PHASES.introPauseEnd) return ANIMATION.imageScale;
-    if (p < PHASES.introEnd) {
-      const progress = (p - PHASES.introPauseEnd) / (PHASES.introEnd - PHASES.introPauseEnd);
+    if (p < SCROLL.introPauseEnd) return ANIMATION.imageScale;
+    if (p < SCROLL.introEnd) {
+      const progress = (p - SCROLL.introPauseEnd) / (SCROLL.introEnd - SCROLL.introPauseEnd);
       return ANIMATION.imageScale - progress * (ANIMATION.imageScale - 1);
     }
     return 1;
   });
-  // 使用更稳定的弹簧配置，避免快速滚动时的异常跳跃
-  const introScale = useSpring(introScaleRaw, { 
-    stiffness: 60, 
-    damping: 25,
-    restSpeed: 0.01,
-    restDelta: 0.001,
-  });
+  const introScale = useSpring(introScaleRaw, ANIMATION.scrollScaleSpring);
 
   // Outro 缩放：放大 → 停留
   const outroScaleRaw = useTransform(scrollYProgress, (p: number) => {
-    if (p < PHASES.outroStart) return 1;
-    if (p < PHASES.outroPauseStart) {
-      const progress = (p - PHASES.outroStart) / (PHASES.outroPauseStart - PHASES.outroStart);
+    if (p < SCROLL.outroStart) return 1;
+    if (p < SCROLL.outroPauseStart) {
+      const progress = (p - SCROLL.outroStart) / (SCROLL.outroPauseStart - SCROLL.outroStart);
       return 1 + progress * (ANIMATION.imageScale - 1);
     }
     return ANIMATION.imageScale;
   });
-  const outroScale = useSpring(outroScaleRaw, { 
-    stiffness: 60, 
-    damping: 25,
-    restSpeed: 0.01,
-    restDelta: 0.001,
-  });
+  const outroScale = useSpring(outroScaleRaw, ANIMATION.scrollScaleSpring);
 
   // 水平位移
   const x = useTransform(scrollYProgress, (p): number => {
     // 确保 maxScroll 已经计算好（containerWidth > 0）
     // 初始加载时 scrollYProgress 可能有微小的非零值，强制返回 0
     if (containerWidth === 0 || p < 0.001) return 0;
-    if (p < PHASES.introEnd) return 0;
-    if (p < PHASES.outroStart) {
-      return ((p - PHASES.introEnd) / (PHASES.outroStart - PHASES.introEnd)) * maxScroll;
+    if (p < SCROLL.introEnd) return 0;
+    if (p < SCROLL.outroStart) {
+      return ((p - SCROLL.introEnd) / (SCROLL.outroStart - SCROLL.introEnd)) * maxScroll;
     }
     return maxScroll;
   });
-  // 使用更硬的弹簧，减少 Outro 缩放时的位置延迟
-  const springX = useSpring(x, { stiffness: 800, damping: 50 });
+  const springX = useSpring(x, ANIMATION.scrollPositionSpring);
 
-  // 内容透明度（与缩放动画同步，使用较软弹簧确保丝滑过渡）
+  // 内容透明度（与缩放动画同步）
   const contentOpacityRaw = useTransform(scrollYProgress, (p: number): number => {
-    // 停留区间：完全透明
-    if (p < PHASES.introPauseEnd) return 0;
+    if (p < SCROLL.introPauseEnd) return 0;
     
-    // 淡入阶段：与 Intro 缩放同步，延迟30%开始
-    if (p < PHASES.introEnd) {
-      const totalDuration = PHASES.introEnd - PHASES.introPauseEnd;
-      const delayedStart = PHASES.introPauseEnd + totalDuration * 0.3;
+    if (p < SCROLL.introEnd) {
+      const totalDuration = SCROLL.introEnd - SCROLL.introPauseEnd;
+      const delayedStart = SCROLL.introPauseEnd + totalDuration * SCROLL.contentFadeDelayRatio;
       if (p < delayedStart) return 0;
-      const progress = (p - delayedStart) / (PHASES.introEnd - delayedStart);
-      return Math.pow(progress, 0.8);
+      const progress = (p - delayedStart) / (SCROLL.introEnd - delayedStart);
+      return Math.pow(progress, SCROLL.contentFadeEasePower);
     }
     
-    // 正常可见
-    if (p < PHASES.outroStart) return 1;
+    if (p < SCROLL.outroStart) return 1;
     
-    // 淡出阶段：与 Outro 缩放同步，提前30%结束
-    if (p < PHASES.outroPauseStart) {
-      const totalDuration = PHASES.outroPauseStart - PHASES.outroStart;
-      const earlyEnd = PHASES.outroStart + totalDuration * 0.7;
+    if (p < SCROLL.outroPauseStart) {
+      const totalDuration = SCROLL.outroPauseStart - SCROLL.outroStart;
+      const earlyEnd = SCROLL.outroStart + totalDuration * SCROLL.contentFadeEarlyEndRatio;
       if (p > earlyEnd) return 0;
-      const progress = (p - PHASES.outroStart) / (earlyEnd - PHASES.outroStart);
-      return 1 - Math.pow(progress, 0.8);
+      const progress = (p - SCROLL.outroStart) / (earlyEnd - SCROLL.outroStart);
+      return 1 - Math.pow(progress, SCROLL.contentFadeEasePower);
     }
     
-    // 停留区间：完全透明
     return 0;
   });
-  // 使用更稳定的弹簧，让快速滚动时透明度变化也平滑
-  const contentOpacity = useSpring(contentOpacityRaw, { 
-    stiffness: 60, 
-    damping: 25,
-    restSpeed: 0.01,
-    restDelta: 0.001,
-  });
+  const contentOpacity = useSpring(contentOpacityRaw, ANIMATION.scrollScaleSpring);
 
   // =========================================================================
   // 无缝循环：停留 + 累积动量 + 瞬间跳转
   // =========================================================================
-  const PAUSE_DURATION = 1000; // 停留时间（毫秒）
-  const MOMENTUM_THRESHOLD = 600; // 动量阈值
-  
   const pauseStartTimeRef = useRef<number | null>(null);
   const isPauseCompleteRef = useRef(false);
   const accumulatedDeltaRef = useRef(0);
@@ -234,7 +193,6 @@ export default function HomeClient({
       const isOverscrolling = (atTop && e.deltaY < 0) || (atBottom && e.deltaY > 0);
 
       if (!isOverscrolling) {
-        // 离开边界，重置所有状态
         pauseStartTimeRef.current = null;
         isPauseCompleteRef.current = false;
         accumulatedDeltaRef.current = 0;
@@ -244,42 +202,37 @@ export default function HomeClient({
       e.preventDefault();
       const now = Date.now();
 
-      // 阶段1：停留计时
       if (!isPauseCompleteRef.current) {
         if (!pauseStartTimeRef.current) {
           pauseStartTimeRef.current = now;
           return;
         }
         
-        if (now - pauseStartTimeRef.current >= PAUSE_DURATION) {
+        if (now - pauseStartTimeRef.current >= SCROLL.loopPauseMs) {
           isPauseCompleteRef.current = true;
           accumulatedDeltaRef.current = 0;
         }
         return;
       }
 
-      // 阶段2：累积动量
       accumulatedDeltaRef.current += Math.abs(e.deltaY);
 
-      if (accumulatedDeltaRef.current >= MOMENTUM_THRESHOLD) {
+      if (accumulatedDeltaRef.current >= SCROLL.loopMomentumThreshold) {
         isJumpingRef.current = true;
         
-        // 重置状态
         pauseStartTimeRef.current = null;
         isPauseCompleteRef.current = false;
         accumulatedDeltaRef.current = 0;
 
         if (atTop) {
-          // 跳到底部（Outro 最大状态）
           springX.jump(maxScroll);
-          introScale.jump(1); // Intro 变小
-          outroScale.jump(ANIMATION.imageScale); // Outro 最大
+          introScale.jump(1);
+          outroScale.jump(ANIMATION.imageScale);
           container.scrollTop = maxScrollTop;
         } else {
-          // 跳到顶部（Intro 最大状态）
           springX.jump(0);
-          introScale.jump(ANIMATION.imageScale); // Intro 最大
-          outroScale.jump(1); // Outro 变小
+          introScale.jump(ANIMATION.imageScale);
+          outroScale.jump(1);
           container.scrollTop = 0;
         }
 
@@ -291,7 +244,7 @@ export default function HomeClient({
 
     container.addEventListener('wheel', handleWheel, { passive: false });
     return () => container.removeEventListener('wheel', handleWheel);
-  }, [springX, maxScroll]);
+  }, [springX, maxScroll, introScale, outroScale]);
 
   // =========================================================================
   // Navigation
@@ -326,7 +279,6 @@ export default function HomeClient({
       ref={scrollContainerRef}
       className="h-[100dvh] w-full overflow-y-auto overflow-x-hidden bg-stone-100 dark:bg-neutral-700 no-scrollbar overscroll-none"
       style={{
-        // 在窗口尺寸就绪前隐藏内容，避免跳动
         visibility: isReady ? 'visible' : 'hidden',
       }}
     >

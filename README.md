@@ -79,12 +79,11 @@ src/
 │   ├── ui/                       # 通用基础组件
 │   │   ├── index.ts              # 桶文件导出
 │   │   ├── CrosshairToggle.tsx   # 十字准星暗色模式切换
-│   │   ├── DarkModeToggle.tsx    # 暗色模式开关
 │   │   ├── DisableContextMenu.tsx # 禁用右键菜单
 │   │   ├── ErrorBoundary.tsx     # 错误边界
-│   │   ├── InteractiveList.tsx   # 交互列表
 │   │   ├── ScrambleText.tsx      # 文字乱码解码动画
-│   │   └── TypedText.tsx         # 打字机效果
+│   │   ├── ScrollHint.tsx        # 滚动提示
+│   │   └── ScrollingText.tsx     # 背景滚动大字
 │   ├── layout/                   # 全局布局组件
 │   │   ├── index.ts              # 桶文件导出
 │   │   └── Navigation.tsx        # 导航栏
@@ -95,17 +94,15 @@ src/
 ├── hooks/                        # 自定义 Hooks
 │   ├── index.ts                  # 桶文件导出
 │   ├── useImageCache.ts          # 图片缓存管理
-│   ├── useInfiniteScroll.ts      # 无限循环滚动（未启用）
 │   ├── useMasonryLayout.ts       # 瀑布流布局计算（智能填坑算法）
-│   ├── useMouse.ts               # 鼠标位置追踪
 │   ├── useParallax.ts            # 视差物理引擎
 │   ├── useProgressiveImage.ts    # 渐进式图片加载
 │   └── useScrollSpy.ts           # 滚动监听与导航
 └── lib/                          # 工具库
-    ├── config.ts                 # 全局配置中心（含 SEO 元数据）
+    ├── config.ts                 # 全局配置中心（布局/动画/滚动阶段/SEO）
     ├── imageConfig.ts            # 图片优化配置
     ├── imageService.ts           # 图片优化服务
-    ├── notion.ts                 # Notion API 服务
+    ├── notion.ts                 # Notion API 服务（请求级去重）
     └── transformers.ts           # 数据转换器
 ```
 
@@ -128,12 +125,14 @@ src/
 ### 3. 滚动阶段管理
 
 ```
-Phase 1 (0% - 6%):    Intro 停留（全屏）
-Phase 2 (6% - 12%):   Intro 缩放（大→小），内容淡入
-Phase 3 (12% - 88%):  水平滚动
-Phase 4 (88% - 94%):  Outro 缩放（小→大），内容淡出
+Phase 1 (0% - 6%):    Intro 停留（全屏）      ← SCROLL.introPauseEnd
+Phase 2 (6% - 12%):   Intro 缩放（大→小），内容淡入  ← SCROLL.introEnd
+Phase 3 (12% - 88%):  水平滚动                ← SCROLL.outroStart
+Phase 4 (88% - 94%):  Outro 缩放（小→大），内容淡出  ← SCROLL.outroPauseStart
 Phase 5 (94% - 100%): Outro 停留（全屏）
 ```
+
+阶段阈值与循环参数统一在 `src/lib/config.ts` 的 `SCROLL` / `ANIMATION` 中维护。
 
 ### 4. 双向无缝循环
 
@@ -239,10 +238,12 @@ npm start
 - ✅ 文字乱码解码动画（ScrambleText，基于 use-scramble）
 - ✅ 渐进式图片加载（缩略图 → 高清）
 - ✅ 图片缓存管理（避免重复加载）
+- ✅ Notion 请求级去重（layout / metadata / page 共用一次拉取）
+- ✅ App Router 图片代理（`/api/image-proxy`）
 
 ## 版本
 
-**v1.0.0** - 首个正式版本
+**v1.1.0** - 优化重构：去冗余、配置 SSOT、Notion 缓存、依赖精简（行为与观感不变）
 
 ## License
 

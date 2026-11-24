@@ -51,6 +51,10 @@ export interface SpringConfig {
   stiffness: number;
   /** 阻尼系数 */
   damping: number;
+  /** 静止速度阈值 */
+  restSpeed?: number;
+  /** 静止位移阈值 */
+  restDelta?: number;
 }
 
 export interface AnimationConfig {
@@ -70,15 +74,33 @@ export interface AnimationConfig {
   spring: SpringConfig;
   /** 缩放动画弹簧配置 */
   scaleSpring: SpringConfig;
+  /** Intro/Outro 与透明度共用的软弹簧（抗快速滚动抖动） */
+  scrollScaleSpring: SpringConfig;
+  /** 水平位移硬弹簧（减少 Outro 缩放时的位置延迟） */
+  scrollPositionSpring: SpringConfig;
 }
 
 export interface ScrollConfig {
-  /** 缩放动画结束的滚动进度点 */
-  scaleEndProgress: number;
-  /** 水平滚动开始的进度点 */
-  horizontalScrollStartProgress: number;
+  /** Intro 全屏停留结束进度 */
+  introPauseEnd: number;
+  /** Intro 缩放结束 / 水平滚动开始进度 */
+  introEnd: number;
+  /** Outro 缩放开始进度 */
+  outroStart: number;
+  /** Outro 全屏停留开始进度 */
+  outroPauseStart: number;
   /** 滚动末尾检测阈值 (px) */
   endThreshold: number;
+  /** 边界循环：停留时长 (ms) */
+  loopPauseMs: number;
+  /** 边界循环：动量阈值 (px) */
+  loopMomentumThreshold: number;
+  /** 内容淡入相对 Intro 缩放区间的延迟比例 */
+  contentFadeDelayRatio: number;
+  /** 内容淡出相对 Outro 缩放区间的提前结束比例 */
+  contentFadeEarlyEndRatio: number;
+  /** 透明度缓动指数 */
+  contentFadeEasePower: number;
 }
 
 export interface GridConfig {
@@ -194,16 +216,33 @@ export const ANIMATION: AnimationConfig = {
     stiffness: 400,
     damping: 40,
   },
+  scrollScaleSpring: {
+    stiffness: 60,
+    damping: 25,
+    restSpeed: 0.01,
+    restDelta: 0.001,
+  },
+  scrollPositionSpring: {
+    stiffness: 800,
+    damping: 50,
+  },
 } as const;
 
 // ============================================================================
-// Scroll - 滚动配置
+// Scroll - 滚动配置（与 HomeClient 阶段机一致）
 // ============================================================================
 
 export const SCROLL: ScrollConfig = {
-  scaleEndProgress: 0.05,
-  horizontalScrollStartProgress: 0.05,
+  introPauseEnd: 0.06,
+  introEnd: 0.12,
+  outroStart: 0.88,
+  outroPauseStart: 0.94,
   endThreshold: 50,
+  loopPauseMs: 1000,
+  loopMomentumThreshold: 600,
+  contentFadeDelayRatio: 0.3,
+  contentFadeEarlyEndRatio: 0.7,
+  contentFadeEasePower: 0.8,
 } as const;
 
 // ============================================================================
