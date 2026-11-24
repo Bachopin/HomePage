@@ -2,12 +2,14 @@
 
 ## 概述
 
-两层策略：
+首屏策略是 **真·渐进**：
 
-1. **运行时**：`/api/image-proxy`（App Router + Sharp）按需缩放、WebP/JPEG、CDN 缓存；Notion 签名 URL 过期时按 path 匹配刷新。
-2. **可选构建时**：`npm run optimize-images` 预生成多尺寸到 `public/images/optimized/`，运行时 `imageService` 优先用本地文件。
+1. 立刻用 Notion 原图铺卡（不设 `crossOrigin`，避免 CORS 假失败）
+2. 后台解析本地映射或同源 `/api/image-proxy`，预加载成功后再切换
+3. 代理按**卡片宽度**缩放；403/过期签名会刷新重试；失败返回 502（不再用透明像素伪装成功）
 
-默认 `npm run build` **不会**自动跑图片预优化；需要时用 `npm run build:with-images`。
+另有可选构建时预优化：`npm run optimize-images` → `public/images/optimized/`。  
+仓库自带空的 `image-mapping.json`，避免运行时 404 拖慢。默认 `npm run build` 不跑预优化。
 
 ## 命令
 

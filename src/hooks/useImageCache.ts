@@ -1,17 +1,13 @@
 /**
  * 图片缓存 Hook
- * 
- * 职责：
- * 1. 缓存已加载的图片，避免重复请求
- * 2. 预加载可见区域附近的图片
- * 3. 提供图片加载状态管理
+ *
+ * - 全局 Map 去重
+ * - 模块级清理定时器
+ * - 仅对同源 URL 设置 crossOrigin（Notion 原图设 anonymous 会 CORS 失败）
  */
 
 import { useState, useEffect, useCallback } from 'react';
-
-// ============================================================================
-// Types
-// ============================================================================
+import { isSameOriginImageUrl } from '@/lib/imageService';
 
 export interface ImageCacheEntry {
   url: string;
@@ -28,16 +24,11 @@ export interface UseImageCacheResult {
   clearCache: () => void;
 }
 
-// ============================================================================
-// Global Cache
-// ============================================================================
-
 const imageCache = new Map<string, ImageCacheEntry>();
-const MAX_CACHE_SIZE = 50; // 最大缓存数量
-const CACHE_EXPIRE_TIME = 30 * 60 * 1000; // 30分钟过期
-const CLEANUP_INTERVAL = 5 * 60 * 1000; // 5分钟
+const MAX_CACHE_SIZE = 80;
+const CACHE_EXPIRE_TIME = 30 * 60 * 1000;
+const CLEANUP_INTERVAL = 5 * 60 * 1000;
 
-// 模块级单一定时器（避免每个卡片实例各自 setInterval）
 let cleanupTimer: ReturnType<typeof setInterval> | null = null;
 let cleanupSubscribers = 0;
 
@@ -52,10 +43,9 @@ function cleanExpiredCache() {
 
 function limitCacheSize() {
   if (imageCache.size <= MAX_CACHE_SIZE) return;
-  
-  const entries = Array.from(imageCache.entries())
-    .sort(([, a], [, b]) => a.timestamp - b.timestamp);
-  
+  const entries = Array.from(imageCache.entries()).sort(
+    ([, a], [, b]) => a.timestamp - b.timestamp
+  );
   const toDelete = entries.slice(0, imageCache.size - MAX_CACHE_SIZE);
   toDelete.forEach(([url]) => imageCache.delete(url));
 }
@@ -75,9 +65,18 @@ function unsubscribeCleanupTimer() {
   }
 }
 
-// ============================================================================
-// Hook
-// ============================================================================
+/** Warm global cache after an external preload (avoids upgrade flicker). */
+export function warmImageCache(url: string, element?: HTMLImageElement) {
+  if (!url) return;
+  imageCache.set(url, {
+    url,
+    loaded: true,
+    error: false,
+    element,
+    timestamp: Date.now(),
+  });
+  limitCacheSize();
+}
 
 export function useImageCache(imageUrl: string): UseImageCacheResult {
   const [isLoaded, setIsLoaded] = useState(false);
@@ -88,14 +87,17 @@ export function useImageCache(imageUrl: string): UseImageCacheResult {
 
     const cached = imageCache.get(url);
     if (cached) {
-      if (cached.loaded) return Promise.resolve();
+      if (cached.loaded) return;
       if (cached.error) return Promise.reject(new Error('Image failed to load'));
     }
 
     return new Promise((resolve, reject) => {
       const img = new Image();
-      img.crossOrigin = 'anonymous';
-      
+      // Only same-origin: Notion signed URLs often lack CORS → anonymous would fail
+      if (isSameOriginImageUrl(url)) {
+        img.crossOrigin = 'anonymous';
+      }
+
       img.onload = () => {
         imageCache.set(url, {
           url,
@@ -104,11 +106,10 @@ export function useImageCache(imageUrl: string): UseImageCacheResult {
           element: img,
           timestamp: Date.now(),
         });
-        
         limitCacheSize();
         resolve();
       };
-      
+
       img.onerror = () => {
         imageCache.set(url, {
           url,
@@ -116,10 +117,9 @@ export function useImageCache(imageUrl: string): UseImageCacheResult {
           error: true,
           timestamp: Date.now(),
         });
-        
         reject(new Error('Image failed to load'));
       };
-      
+
       img.src = url;
     });
   }, []);
@@ -142,18 +142,27 @@ export function useImageCache(imageUrl: string): UseImageCacheResult {
       return;
     }
 
+    let cancelled = false;
     setIsLoaded(false);
     setHasError(false);
 
     preloadImage(imageUrl)
       .then(() => {
-        setIsLoaded(true);
-        setHasError(false);
+        if (!cancelled) {
+          setIsLoaded(true);
+          setHasError(false);
+        }
       })
       .catch(() => {
-        setIsLoaded(false);
-        setHasError(true);
+        if (!cancelled) {
+          setIsLoaded(false);
+          setHasError(true);
+        }
       });
+
+    return () => {
+      cancelled = true;
+    };
   }, [imageUrl, preloadImage]);
 
   useEffect(() => {
