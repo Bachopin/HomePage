@@ -1,11 +1,9 @@
 /**
  * 图片代理 API (App Router)
  *
- * 功能：
- * 1. 代理 Notion 图片请求
- * 2. 实时优化和缓存
- * 3. 自动处理 URL 过期
- * 4. 支持多种尺寸和格式
+ * - 拉 Notion/外部图 → Sharp 缩放转码 → 长缓存
+ * - HTTP 403/404 时按 path 匹配刷新 Notion 签名 URL 并重试
+ * - 失败返回真实错误码（不再用 200 + 透明像素骗前端）
  */
 
 import sharp from 'sharp';
@@ -13,18 +11,12 @@ import { getDatabaseItems } from '@/lib/notion';
 
 export const runtime = 'nodejs';
 
-const CACHE_DURATION = 7 * 24 * 60 * 60; // 7天 CDN 缓存
-const MAX_AGE = 30 * 24 * 60 * 60; // 30天浏览器缓存
-const URL_CACHE_TTL = 12 * 60 * 60 * 1000; // 12小时
+const CACHE_DURATION = 7 * 24 * 60 * 60;
+const MAX_AGE = 30 * 24 * 60 * 60;
+const URL_CACHE_TTL = 12 * 60 * 60 * 1000;
 
 const urlCache = new Map<string, { url: string; timestamp: number }>();
 
-const TRANSPARENT_PIXEL = Buffer.from(
-  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==',
-  'base64'
-);
-
-/** Stable key for Notion signed URLs (query params rotate; path usually stays). */
 function imageUrlKey(url: string): string {
   try {
     const parsed = new URL(url);
@@ -34,7 +26,7 @@ function imageUrlKey(url: string): string {
   }
 }
 
-async function getRefreshedImageUrl(originalUrl: string): Promise<string> {
+async function getRefreshedImageUrl(originalUrl: string): Promise<string | null> {
   const cached = urlCache.get(originalUrl);
   if (cached && Date.now() - cached.timestamp < URL_CACHE_TTL) {
     return cached.url;
@@ -44,10 +36,10 @@ async function getRefreshedImageUrl(originalUrl: string): Promise<string> {
     const { items } = await getDatabaseItems();
     const originalKey = imageUrlKey(originalUrl);
     const item = items.find(
-      entry => entry.image && imageUrlKey(entry.image) === originalKey
+      (entry) => entry.image && imageUrlKey(entry.image) === originalKey
     );
 
-    if (item?.image) {
+    if (item?.image && item.image !== originalUrl) {
       urlCache.set(originalUrl, {
         url: item.image,
         timestamp: Date.now(),
@@ -58,34 +50,62 @@ async function getRefreshedImageUrl(originalUrl: string): Promise<string> {
     console.warn('Failed to refresh image URL:', error);
   }
 
-  return originalUrl;
+  return null;
+}
+
+async function fetchRemoteImage(imageUrl: string): Promise<Response> {
+  const response = await fetch(imageUrl, {
+    headers: {
+      // Some CDNs behave better with a UA
+      'User-Agent': 'MextricHomepageImageProxy/1.1',
+      Accept: 'image/*,*/*;q=0.8',
+    },
+    redirect: 'follow',
+  });
+
+  if (response.ok) return response;
+
+  // Expired Notion signed URLs typically 403 — refresh and retry once
+  if (response.status === 403 || response.status === 404 || response.status === 401) {
+    const refreshed = await getRefreshedImageUrl(imageUrl);
+    if (refreshed) {
+      const retry = await fetch(refreshed, {
+        headers: {
+          'User-Agent': 'MextricHomepageImageProxy/1.1',
+          Accept: 'image/*,*/*;q=0.8',
+        },
+        redirect: 'follow',
+      });
+      if (retry.ok) return retry;
+      throw new Error(`Refresh fetch failed: ${retry.status}`);
+    }
+  }
+
+  throw new Error(`Failed to fetch image: ${response.status}`);
 }
 
 async function fetchAndOptimizeImage(
   imageUrl: string,
   width?: number,
   height?: number,
-  quality: number = 85,
+  quality: number = 82,
   format: 'webp' | 'jpeg' = 'webp'
 ): Promise<{ buffer: Buffer; contentType: string }> {
   let response: Response;
   try {
-    response = await fetch(imageUrl);
+    response = await fetchRemoteImage(imageUrl);
   } catch (error) {
-    const refreshedUrl = await getRefreshedImageUrl(imageUrl);
-    if (refreshedUrl !== imageUrl) {
-      response = await fetch(refreshedUrl);
+    // Network throw — still try refresh once
+    const refreshed = await getRefreshedImageUrl(imageUrl);
+    if (refreshed) {
+      response = await fetchRemoteImage(refreshed);
     } else {
       throw error;
     }
   }
 
-  if (!response.ok) {
-    throw new Error(`Failed to fetch image: ${response.status}`);
-  }
-
   const imageBuffer = Buffer.from(await response.arrayBuffer());
-  let pipeline = sharp(imageBuffer);
+  let pipeline = sharp(imageBuffer, { failOn: 'none' });
 
   if (width || height) {
     pipeline = pipeline.resize(width, height, {
@@ -94,10 +114,11 @@ async function fetchAndOptimizeImage(
     });
   }
 
+  // Lower effort = faster serverless cold path; quality still fine for cards
   if (format === 'webp') {
     pipeline = pipeline.webp({
       quality,
-      effort: 6,
+      effort: 3,
       smartSubsample: true,
     });
   } else {
@@ -118,10 +139,11 @@ async function fetchAndOptimizeImage(
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
+  // URLSearchParams already decodes once — do not decodeURIComponent again
   const url = searchParams.get('url');
   const w = searchParams.get('w');
   const h = searchParams.get('h');
-  const q = searchParams.get('q') ?? '85';
+  const q = searchParams.get('q') ?? '82';
   const f = searchParams.get('f') ?? 'webp';
 
   if (!url) {
@@ -131,13 +153,13 @@ export async function GET(request: Request) {
   try {
     const width = w ? parseInt(w, 10) : undefined;
     const height = h ? parseInt(h, 10) : undefined;
-    const quality = Math.min(100, Math.max(1, parseInt(q, 10) || 85));
+    const quality = Math.min(100, Math.max(1, parseInt(q, 10) || 82));
     const format = f === 'jpeg' ? 'jpeg' : 'webp';
 
     const { buffer, contentType } = await fetchAndOptimizeImage(
-      decodeURIComponent(url),
+      url,
       width,
-      height,
+      Number.isFinite(height) ? height : undefined,
       quality,
       format
     );
@@ -147,19 +169,21 @@ export async function GET(request: Request) {
       headers: {
         'Content-Type': contentType,
         'Content-Length': String(buffer.length),
-        'Cache-Control': `public, max-age=${MAX_AGE}, s-maxage=${CACHE_DURATION}`,
+        'Cache-Control': `public, max-age=${MAX_AGE}, s-maxage=${CACHE_DURATION}, stale-while-revalidate=86400`,
         'CDN-Cache-Control': `public, max-age=${CACHE_DURATION}`,
       },
     });
   } catch (error) {
     console.error('Image proxy error:', error);
-
-    return new Response(new Uint8Array(TRANSPARENT_PIXEL), {
-      status: 200,
-      headers: {
-        'Content-Type': 'image/png',
-        'Cache-Control': 'public, max-age=60',
-      },
-    });
+    // Real error so client keeps / falls back to original instead of "successful" blank pixel
+    return Response.json(
+      { error: 'Image proxy failed' },
+      {
+        status: 502,
+        headers: {
+          'Cache-Control': 'public, max-age=30',
+        },
+      }
+    );
   }
 }

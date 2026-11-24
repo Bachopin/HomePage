@@ -426,63 +426,70 @@ export default function MasonryCard({
     (opacity: number) => opacity < 0.1 ? 'none' : 'auto'
   );
 
-  // 使用渐进式图片加载
+  // 获取布局配置（先算卡宽，再驱动渐进加载目标尺寸）
+  const viewportWidth = typeof window !== 'undefined' ? window.innerWidth : DEFAULTS.windowWidth;
+  const layout = getLayoutConfig(viewportWidth);
+  const cardDims = getCardPixelDimensions(size, layout);
+
+  // 使用渐进式图片加载：立刻原图，后台升级；按卡片宽度出代理图
   const { 
     currentImageUrl, 
     isOptimized, 
     isLoading, 
     hasError,
-    loadingProgress 
   } = useProgressiveImage(image || '', {
-    viewportWidth: typeof window !== 'undefined' ? window.innerWidth : 1200,
+    viewportWidth,
     devicePixelRatio: typeof window !== 'undefined' ? window.devicePixelRatio : 1,
+    targetWidth: cardDims.width,
     enableOptimization: true,
   });
-
-  // 获取布局配置
-  const viewportWidth = typeof window !== 'undefined' ? window.innerWidth : DEFAULTS.windowWidth;
-  const layout = getLayoutConfig(viewportWidth);
-  const cardDims = getCardPixelDimensions(size, layout);
 
   // 计算卡片中心 X 坐标
   const cardCenterX = cardPosition ?? 0;
 
+  // 卡片网格比例可先用作视差几何，避免等 naturalWidth
+  const displayImgSize: ImageSize | null =
+    imgSize ??
+    (image && image.trim() !== '' && type === 'project'
+      ? { w: cardDims.width, h: cardDims.height }
+      : null);
+
   // 使用视差 Hook
   const { x: parallaxX, y: parallaxY, scale, isHorizontalMove } = useParallax({
     scrollProgress,
-    imageSize: imgSize,
+    imageSize: displayImgSize,
     cardDimensions: { width: cardDims.width, height: cardDims.height },
     cardCenterX,
     viewportWidth,
   });
 
-  // 获取图片尺寸和设置透明度
+  // 精化真实宽高比 + 淡入
   useEffect(() => {
     if (type === 'project' && currentImageUrl && currentImageUrl.trim() !== '' && !isLoading && !hasError) {
-      // 图片已加载，获取尺寸
       const img = new window.Image();
-      img.src = currentImageUrl;
+      // 勿对 Notion 原图设 crossOrigin，否则 CORS 失败导致永远不淡入
       img.onload = () => {
-        setImgSize({ w: img.naturalWidth, h: img.naturalHeight });
-        // 根据加载进度调整淡入速度
-        const fadeDelay = loadingProgress === 'complete' ? 10 : 50;
-        setTimeout(() => setImageOpacity(1), fadeDelay);
+        if (img.naturalWidth > 0 && img.naturalHeight > 0) {
+          setImgSize({ w: img.naturalWidth, h: img.naturalHeight });
+        }
+        setImageOpacity(1);
       };
+      img.onerror = () => {
+        setImageOpacity(1);
+      };
+      img.src = currentImageUrl;
     } else if (type === 'project' && (!currentImageUrl || hasError)) {
-      // 无图片或图片错误
       setImgSize(null);
       setImageOpacity(1);
     }
-  }, [currentImageUrl, type, isLoading, hasError, loadingProgress]);
+  }, [currentImageUrl, type, isLoading, hasError]);
 
-  // 判断是否有图片
-  const hasImage = currentImageUrl && currentImageUrl.trim() !== '';
-  // 判断是否应该显示占位符（只在有图片但正在加载且未出错时才显示）
-  const shouldShowPlaceholder = hasImage && isLoading && !hasError;
-  // 判断是否有内容（Name、Summary、Quotes 任意一个有文字）
+  // 有 Notion Cover 时优先当图片卡；仅当当前展示 URL 失败才降级文字卡
+  const sourceHasImage = Boolean(image && image.trim() !== '');
+  const hasImage = Boolean(currentImageUrl && currentImageUrl.trim() !== '');
+  const shouldShowPlaceholder = sourceHasImage && isLoading && !hasError;
   const hasContent = (title && title.trim() !== '') || (description && description.trim() !== '') || (quotes && quotes.trim() !== '');
-  // 判断是否应该显示为文字卡片（无图片 或 图片加载失败）
-  const shouldShowAsTextCard = !hasImage || hasError;
+  const shouldShowAsTextCard = !sourceHasImage || (hasError && !hasImage);
 
   // Grid area class (for non-absolute positioning)
   const gridAreaClass = `row-span-${cardDims.rows} col-span-${cardDims.cols}`;
@@ -552,11 +559,11 @@ export default function MasonryCard({
             <ProjectCardSkeleton />
           )}
 
-          {/* Image with Parallax - 只在有图片且加载成功时显示 */}
-          {hasImage && !isLoading && !hasError && imgSize && (
+          {/* Image with Parallax — 用卡片比例先铺，真实比例稍后精化 */}
+          {hasImage && !isLoading && !hasError && displayImgSize && (
             <ProjectCardImage
               image={currentImageUrl}
-              imgSize={imgSize}
+              imgSize={displayImgSize}
               isHorizontalMove={isHorizontalMove}
               parallaxX={parallaxX}
               parallaxY={parallaxY}
