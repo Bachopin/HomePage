@@ -7,16 +7,11 @@
 export { useMasonryLayout } from './useMasonryLayout';
 export type { CardPosition, MasonryLayoutResult, UseMasonryLayoutProps } from './useMasonryLayout';
 
-export { useMouse } from './useMouse';
-
 export { useParallax, calculateParallaxGeometry } from './useParallax';
 export type { ImageSize, CardDimensions, UseParallaxProps, ParallaxGeometry, ParallaxResult } from './useParallax';
 
 export { useScrollSpy } from './useScrollSpy';
 export type { UseScrollSpyProps, UseScrollSpyResult } from './useScrollSpy';
-
-export { useInfiniteScroll, PHASE_BOUNDARIES, SCALE } from './useInfiniteScroll';
-export type { UseInfiniteScrollProps, UseInfiniteScrollResult } from './useInfiniteScroll';
 
 export { useImageCache } from './useImageCache';
 export type { ImageCacheEntry, UseImageCacheResult } from './useImageCache';
