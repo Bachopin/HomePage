@@ -36,8 +36,9 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-# optimized images (generated during build)
-/public/images/optimized/
+# optimized images (generated during build) — keep empty mapping stub tracked
+/public/images/optimized/*
+!/public/images/optimized/image-mapping.json
 
 # Kiro IDE files
 .kiro/
